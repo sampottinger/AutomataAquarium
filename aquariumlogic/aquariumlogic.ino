@@ -104,7 +104,10 @@ long crs_getPos(int id)
 int crs_convertVelocityToRaw_(int id, float vel)
 {
   ContinuousRotationServo * target = crs_getInstance(id);
-  return vel * MS_PER_SEC * target->velocitySlope;
+  Serial.print("Velocity slope: ");
+  Serial.print(target->velocitySlope);
+  Serial.print("\n");
+  return vel * target->velocitySlope + target->zeroValue;
 }
 
 void crs_loadPosition_(int id)
@@ -245,16 +248,80 @@ void crs_calibrate_(int id)
   }
     
   Serial.print("Found linear segment.\n");
+  
+  // Adjust for backwards
+  if(!increasing)
+  {
+    target->velocitySlope *= -1;
+    crs_setVelocity_(id, currentVel);
+  }
+  
+  Serial.print("Starting speed observation.\n");
+  delay(1000);
+
+  // Change speed until delta position = 0
+  // within clean section
+  numMatchingVals = 0;
+  while(numMatchingVals < REQUIRED_NUM_MATCHING_VALS)
+  {
+    lastVal = analogRead(potLine);
+    delay(10);
+    potVal = analogRead(potLine);
+    deltaPos = potVal - lastVal;
+    
+    Serial.print(deltaPos);
+    Serial.print("\n");
+    
+    if(deltaPos == 0)
+    {
+      numMatchingVals++;
+    }
+    else
+    {
+      if(deltaPos > 0)
+        currentVel--;
+      else
+        currentVel++;
+        
+      numMatchingVals = 0;
+      Serial.print("High level velocity value: ");
+      Serial.print(currentVel);
+      Serial.print("\n");
+      crs_setVelocity_(id, currentVel);
+    }
+  }
+  
+  // Update zero value
+  target->zeroValue += target->velocitySlope * currentVel;
+
+  // Record zero and values for x1 and y1
+  raw1 = 0;
+  speed1 = 0;
+
+  // Try another velocity for x2 and y2
+  //crs_setVelocity_(id, CALIBRATION_VEL_SLOPE_SPEED);
+  
+  // Calculate slope
+
+  // Go back to zero
+  
+  // Stop
+  crs_setVelocity_(id, 0);
+  crs_setTargetVelocity(id, 0);
 }
 
 void crs_setVelocity_(int id, int velocity)
 {
-  Serial.print("Setting velocity to ");
-  Serial.print(velocity);
-  Serial.print(".\n");
+  int convertedVelocity;
+  
   ContinuousRotationServo * target = crs_getInstance(id);
   globalServo.attach(target->controlLine);
-  globalServo.write(crs_convertVelocityToRaw_(id, velocity));
+  
+  convertedVelocity = crs_convertVelocityToRaw_(id, velocity);
+  Serial.print("Setting velocity to ");
+  Serial.print(convertedVelocity);
+  Serial.print(".\n");
+  globalServo.writeMicroseconds(convertedVelocity);
 }
 
 void crs_correctPos_(int id)

@@ -93,7 +93,7 @@ typedef struct
   long targetPosition;
   boolean decreasing;
   int targetVel;
-  float velocitySlope; // From calibration
+  double velocitySlope; // From calibration
 } ContinuousRotationServo;
 
 // Continuous rotation servo behavior
