@@ -250,7 +250,7 @@ void crs_calibrate_(int id)
   Serial.print("Found linear segment.\n");
   
   // Adjust for backwards
-  if(!increasing)
+  if(increasing)
   {
     target->velocitySlope *= -1;
     crs_setVelocity_(id, currentVel);
