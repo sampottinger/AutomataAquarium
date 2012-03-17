@@ -257,7 +257,6 @@ void crs_calibrate_(int id)
   }
   
   Serial.print("Starting speed observation.\n");
-  delay(1000);
 
   // Change speed until delta position = 0
   // within clean section
@@ -278,7 +277,7 @@ void crs_calibrate_(int id)
     }
     else
     {
-      currentVel -= round(deltaPos / 5.0);
+      currentVel -= round(deltaPos / 2.0);
         
       numMatchingVals = 0;
       Serial.print("High level velocity value: ");
