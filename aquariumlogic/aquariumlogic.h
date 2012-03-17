@@ -16,6 +16,7 @@
 
 #define MIN_LIGHT_VAL 100
 #define PIEZO_MIN_TAP_VAL 50
+#define NO_TAP
 
 #define NONE -1
 
@@ -34,6 +35,24 @@
 #define LONG_TIME_STEP 100
 #define SHORT_TIME_STEP 10
 
+#define PRE_CALIBRATION_ZERO_VAL 1500
+#define PRE_CALIBRATION_POSITION 0
+#define STARTING_TARGET_VELOCITY 100
+#define DEFAULT_VELOCITY_SLOPE 1
+#define SIZE_OF_POSITION_VAL 4
+
+#define REQUIRED_NUM_MATCHING_VALS 20
+#define MIN_HIGH_VAL 1000
+#define MAX_HIGH_VAL 1024
+#define MAX_LOW_VAL 24
+#define MIN_LOW_VAL 0
+#define SHORT_CALIBRATION_DUR 10
+#define START_CALIBRATION_VEL 50
+
+#define MS_PER_SEC 1000
+
+#define NUM_STEPS_PER_RAD 0.00306796158
+
 #include <Arduino.h>
 #include <math.h>
 #include <stdarg.h>
@@ -43,14 +62,23 @@
 typedef struct
 {
   int controlLine;
-  int potLine;
-  int zeroValue;
-  long position;
+  int potLine; 
+  int zeroValue; // From calibration
+  long position; // Zerored at calibration
   long targetPosition;
+  boolean decreasing;
   int targetVel;
+  float velocitySlope; // From calibration
 } ContinuousRotationServo;
 
 // Continuous rotation servo behavior
+
+/**
+ * Name: crs_getInstance(int id)
+ * Desc: Get the continuous rotation servo instance with the given id
+ * Para: id, The unique numerical id of the desired servo
+**/
+ContinuousRotationServo * crs_getInstance(int id);
 
 /**
  * Name: crs_init(int id, byte controlLine, byte potLine)
@@ -58,9 +86,9 @@ typedef struct
  * Para: id, The unique id of the servo to operate on
  *       controlLine, Which line to use for PWM to control the device
  *       potLine, The line where the potentiometer is installed
- *       calibrate, If true, servo is calibrated and position reset. If false, loaded from EEPROM
+ *       calibrate, If true, servo's position is reset. If false, loaded from EEPROM
 **/
-void crs_init(int id, byte controlLine, byte potLine, boolean calibrate);
+void crs_init(int id, byte controlLine, byte potLine, boolean zero);
 
 /**
  * Name: crs_startMovingTo(int id, long targetPosition)
@@ -69,14 +97,6 @@ void crs_init(int id, byte controlLine, byte potLine, boolean calibrate);
  *       targetPosition, The position the servo should go to
 **/
 void crs_startMovingTo(int id, long targetPosition);
-
-/**
- * Name: crs_startMovingToDegrees(int id, double angle)
- * Desc: Has this servo start moving to a given angle
- * Para: id, The unique numerical id of the servo to operate on
- *       angle, The angle to move to in degrees (zero due right)
-**/
-void crs_startMovingToDegrees(int id, double angle);
 
 /**
  * Name: crs_startMovingToAngle(int id, double angle)
@@ -95,12 +115,12 @@ void crs_startMovingToAngle(int id, double angle);
 void crs_step(int id, long ms);
 
 /**
- * Name: crs_setVelocity(int id, int targetVelocity)
+ * Name: crs_setTargetVelocity(int id, int targetVelocity)
  * Desc: Sets the velocity this servo should use to reach its goal point
  * Para: id, The unique numerical id of the servo to operate on
  *       targetVelocity, The velocity this servo should use
 **/
-void crs_setVelocity(int id, int targetVelocity);
+void crs_setTargetVelocity(int id, int targetVelocity);
 
 /**
  * Name: crs_onGoalReached(int id)
@@ -122,18 +142,27 @@ long crs_getPos(int id);
  * Name: crs_convertToVelocityRaw(float vel)
  * Desc: Converts the given velocity to a raw value that can be sent
  *       to the servo
- * Para: vel, The velocity to convert
+ * Para: id, The id of the servo to make the conversion for
+ *       vel, The velocity to convert (steps / sec)
  * Note: Should be treated as private member of ContinuousRotationServo
 **/
-int crs_convertVelocityToRaw_(float vel);
+int crs_convertVelocityToRaw_(int id, float vel);
 
 /**
  * Name: crs_loadCalConstants_(int id)
- * Desc: Load position and calibration information from EEPROM
+ * Desc: Load position information from EEPROM
  * Para: id, The id of the servo to operate on
  * Note: Should be treated as private member of ContinuousRotationServo
 **/
-void crs_loadCalConstants_(int id);
+void crs_loadPosition_(int id);
+
+/**
+ * Name:crsh_save_(int id)
+ * Desc: Saves this servo's position information to EEPROM
+ * Para: id, The unique numerical id of the servo to save to mem
+ * Note: Should be treated as private member of ContinuousRotationServo
+**/
+void crs_savePosition_(int id);
 
 /**
  * Name: crs_calibrate_(int id)
@@ -144,12 +173,19 @@ void crs_loadCalConstants_(int id);
 void crs_calibrate_(int id);
 
 /**
- * Name:crsh_save_(int id)
- * Desc: Saves this servo's position and calibration information to EEPROM
- * Para: id, The unique numerical id of the servo to save to mem
- * Note: Should be treated as private member of ContinuousRotationServo
+ * Name: crs_setVelocity_(int id, int velocity)
+ * Desc: Sets the actual velocity the servo should use
+ * Para: id, The id of the servo to set the velocity for
+ *       velocity, The velocity to set this servo to use
 **/
-void crs_save_(int id);
+void crs_setVelocity_(int id, int velocity);
+
+/**
+ * Name: crs_correctPos_(int id)
+ * Desc: Attempts to correct this servo's position using its pot reading
+ * Para: id, The id of the servo to operate on
+**/
+void crs_correctPos_(int id);
 
 // Logic for simple limited rotation servos
 
@@ -161,7 +197,7 @@ typedef struct
 // Limited rotation servo behavior
 
 /**
- * Name: piezo_getInstance(int id)
+ * Name: lrs_getInstance(int id)
  * Desc: Get the limited rotation servo instance with the given id
  * Para: id, The unique numerical id of the desired servo
 **/
@@ -219,7 +255,7 @@ void piezo_init(int id, byte line);
  * Retr: 0 if not reigstering a tap (below threshold) and raw non-zero value
  *       positive reading otherwise
 **/
-int piezo_isFired();
+int piezo_isFired(int id);
 
 // Light sensor abstraction
 typedef struct
@@ -228,6 +264,13 @@ typedef struct
 } LightSensor;
 
 // Light sensor behavior
+
+/**
+ * Name: ls_getInstance(int id)
+ * Desc: Gets the light sensor instance that cooresponds to the given id
+ * Para: id, The unique numerical id of the light sensor to get
+**/
+LightSensor * ls_getInstance(int id);
 
 /**
  * Name: ls_init(int id, byte line)
@@ -331,6 +374,14 @@ void jellyfish_lower(int id);
 **/
 void jellyfish_raise(int id);
 
+/**
+ * Name: jellyfish_step(int id, long ms)
+ * Desc: Propogate the on step event to this jellyfish and its servos
+ * Para: id, The unique numerical id of the jellyfish to propogate events to
+ *       ms, The number of milliseconds since this function was last called
+**/
+void jellyfish_step(int id, long ms);
+
 // Fish abstraction
 
 typedef struct
@@ -400,13 +451,29 @@ void fish_onGoalReached(int id);
 **/
 void fish_goToNextInternalGoal_(int id);
 
+/**
+ * Name: fish_step(int id, long ms)
+ * Desc: Propogates this step event to this fish and its servos
+ * Para: id, The id of the fish to propogate the event to
+ *       ms, The number of milliseconds since this was last called
+**/
+void fish_step(int id, long ms);
+
 // Piezo sensor group abstraction
+typedef struct
+{
+  int sensorID;
+  int highLevelID;
+} SensorGroupMembershipRecord;
 
 typedef struct
 {
   int numSensors;
-  int * sensorNums;
+  int nextElementIndex;
+  SensorGroupMembershipRecord sensorNums;
 } PiezoSensorGroup;
+
+PizeoSensorGroup piezoSensorGroups[NUM_PIEZO_SENSOR_GROUPS]
 
 /**
  * Name: pse_getInstance(int id)
@@ -419,18 +486,34 @@ typedef struct
 PiezoSensorGroup * pse_getInstance(int id);
 
 /**
+ * Name: pse_init(int id, int numSensors)
+ * Desc: Initialize this sensor group's internal state
+ * Para: id, The unique numerical id of this sensor group
+ *       numSensors, The number of sensors in this group
+**/
+void pse_init(int id, int numSensors);
+
+/**
+ * Name: pse_dest(int id)
+ * Desc: Destructs support structures for the given piezo sensor group
+ * Para: id, The unique numerical id of the sensor group to deallocate
+**/
+void pse_dest(int id);
+
+/**
  * Name: pse_addToSensorList(int id, int sensorID)
  * Desc: Adds a new piezo sensor to this group
  * Para: id, The unique numerical id of the group to operate on
  *       sensorID, The id of the sensor to add to this group
+ *       sensorHighLevelID, The int to return when this sensor is fired
 **/
-void pse_addToSensorList(int id, int sensorID);
+void pse_addToSensorList(int id, int sensorID, int sensorHighLevelID);
 
 /**
  * Name: pse_getTapped(int id)
  * Desc: Get the sensor that shows a "tapped state"
  * Para: id, The unique numerical id of the group to operate on
- * Retr: NONE or id of sensor that indicatd a tap
+ * Retr: NONE or high level id of sensor that indicated a tap
 **/
 int pse_getTapped(int id);
 
@@ -442,7 +525,11 @@ typedef struct
   int jellyfishNum;
   int lightSensorNum;
   int piezeoSensorGroupNum;
+  bool isLight;
+  long lastMS;
 } Aquarium;
+
+Aquarium aquariums[NUM_AQUARIUMS];
 
 /**
  * Name: pse_getInstance(int id)
@@ -455,14 +542,19 @@ typedef struct
 Aquarium * aquarium_getInstance(int id);
 
 /**
- * Name: aquarium_init(int id, int fishNum, int jellyfishNum, int lightSensorNum, piezeoSensorGroupNum)
+ * Name: aquarium_init(int id, int fishNum, int jellyfishNum, 
+ *                     int lightSensorNum, piezeoSensorGroupNum)
  * Desc: Initalizes state of the given aquarium
- * Para: id, THhe unique numerical id of this aquarium
- *       jellyfishNum, The unique numerical id of the jellyfish in use in this aquarium
- *       lightSensorNum, The unique numerical id of the light sensor for this aquarium
- *       piezoSensorGroupNum, The unique numerical id of the piezo sensor group for this aquarium
+ * Para: id, The unique numerical id of this aquarium
+ *       jellyfishNum, The unique numerical id of the jellyfish in
+ *                     use in this aquarium
+ *       lightSensorNum, The unique numerical id of the light sensor 
+ *                       for this aquarium
+ *       piezoSensorGroupNum, The unique numerical id of the piezo 
+ *                            sensor group for this aquarium
 **/
-void aquarium_init(int id, int fishNum, int jellyfishNum, int lightSensorNum, int piezeoSensorGroupNum);
+void aquarium_init(int id, int fishNum, int jellyfishNum, int lightSensorNum, 
+                   int piezeoSensorGroupNum);
 
 /**
  * Name: aquarium_shortStep(int id, long ms)
@@ -481,6 +573,15 @@ void aquarium_shortStep(int id, long ms);
 void aquarium_longStep(int id, long ms);
 
 /**
+ * Name: aquarium_tick(int id, long ms)
+ * Desc: Response to a "program level" tick, an event fired at regular intervals
+ *       that propogates to drive the step event
+ * Para: id, The unique id of the aquarium to respond to the tick
+ *       ms, The global system millisecond count
+**/
+void aquarium_tick(int id, long ms);
+
+/**
  * Name: aquarium_onFishReachedGoal(int fishID)
  * Desc: Event handler for when a fish reaches its goal position
  * Para: fishID, The id of the fish that reached its goal
@@ -495,3 +596,26 @@ void aquarium_onFishReachedGoal(int fishID);
  * Note: Should be treated as private member of Aquarium
 **/
 void aquarium_onFishReachedGoal_(int id, int fishID);
+
+/**
+ * Name: aquarium_runFishToOpposingSide_(int id, int tappedSensor);
+ * Desc: Move the fish for the given aquarium to the side opposing the tapped
+ *       sensor id
+ * Para: id, The id of the aquarium to operate on
+ *       tappedSensor, The high level id of the sensor that was fired
+**/
+void aquarium_runFishToOpposingSide_(int id, int tappedSensor);
+
+/**
+ * Name: aquarium_transitionToFishState_(int id)
+ * Desc: Hide the jellyfish and show / move the fish
+ * Para: id, The id of the aquarium to operate on
+**/
+void aquarium_transitionToFishState_(int id);
+
+/**
+ * Name: aquarium_transitionToJellyfishState_(int id)
+ * Desc: Show the jellyfish and hide the fish, stopping its continued motion
+ * Para: id, The id of the aquarium to operate on
+**/
+void aquarium_transitionToJellyfishState_(int id);

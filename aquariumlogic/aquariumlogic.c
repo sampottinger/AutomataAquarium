@@ -1,5 +1,6 @@
 #include "aquariumlogic.h"
 #include <Servo.h>
+#include <EEPROM.h>
 
 Servo globalServo; // Shared limited resource servo instance
 
@@ -16,17 +17,295 @@ Aquarium aquariums[NUM_AQUARIUMS];
 void setup()
 {
   Serial.begin(9600);
-  lrs_init(0, 9);
-  led_init(0, 3);
-  jellyfish_init(0, 0, 0);
+  crs_init(0, 9, 0, true);
 }
 
 void loop()
 {
-  jellyfish_raise(0);
-  delay(3000);
-  jellyfish_lower(0);
-  delay(3000);
+}
+
+ContinuousRotationServo * crs_getInstance(int id)
+{
+  return &(contRotServos[id]);
+}
+
+void crs_init(int id, byte controlLine, byte potLine, boolean zero)
+{
+  ContinuousRotationServo * target = crs_getInstance(id);
+
+  target->controlLine = controlLine;
+  target->potLine = potLine;
+  target->zeroValue = PRE_CALIBRATION_ZERO_VALUE;
+  target->position = PRE_CALIBRATION_POSITION;
+  target->targetPosition = PRE_CALIBRATION_POSITION;
+  target->targetVel = STARTING_TARGET_VELOCITY;
+  target->velocitySlope = DEFAULT_VELOCITY_SLOPE;
+
+  if(!zero)
+    crs_loadPosition_(id);
+
+  crs_calibrate_(id);
+}
+
+void crs_startMovingTo(int id, long targetPosition)
+{
+  ContinuousRotationServo * target = crs_getInstance(id);
+  target->targetPosition = targetPosition;
+  if(targetPosition > target->position)
+  {
+    target->decreasing = false;
+    crs_setVelocity_(id, -target->targetVel);
+  }
+  else
+  {
+    target->decreasing = true;
+    crs_setVelocity_(id, target->targetVel);
+  }
+}
+
+void crs_startMovingToAngle(int id, double angle)
+{
+  crs_startMovingTo(id, NUM_STEPS_PER_RAD * angle);
+}
+
+void crs_step(int id, long ms)
+{
+  long delta;
+  ContinuousRotationServo * target;
+
+  //crs_correct_pos_(id);
+
+  target = crs_getInstance(id);
+  delta = target->targetPosition - target->position;
+
+  if(target->decreasing && delta >= 0)
+    crs_onGoalReached(id);
+  else if(!target->decreasing && delta <= 0)
+    crs_onGoalReached(id);
+}
+
+void crs_setTargetVelocity(int id, int targetVelocity)
+{
+  ContinuousRotationServo * target = crs_getInstance(id);
+  target->targetVel = targetVelocity;
+}
+
+void crs_onGoalReached(int id)
+{
+  crs_setVelocity_(id, 0);
+}
+
+long crs_getPos(int id)
+{
+  ContinuousRotationServo * target = crs_getInstance(id);
+  return target->position;
+}
+
+int crs_convertVelocityToRaw_(int id, float vel)
+{
+  ContinuousRotationServo * target = crs_getInstance(id);
+  return vel * MS_PER_SEC * target->velocitySlope;
+}
+
+void crs_loadPosition_(int id)
+{
+  int i;
+  long position;
+  byte * positionPtr;
+  ContinuousRotationServo * target;
+
+  target = crs_getInstance(id);
+
+  positionPtr = (byte*)&position;
+
+  for(i = 0; i<SIZE_OF_POSITION_VAL; i++)
+    positionPtr[i] = EEPROM.read(id * SIZE_OF_POSITION_VAL + i);
+
+  target->position = position;
+}
+
+void crs_savePosition_(int id)
+{
+  int i;
+  long position;
+  byte * positionPtr;
+  ContinuousRotationServo * target;
+
+  target = crs_getInstance(id);
+  position = target->position;
+  positionPtr = (byte*)&position;
+
+  for(i = 0; i<SIZE_OF_POSITION_VAL; i++)
+    EEPROM.write(id * SIZE_OF_POSITION_VAL + i, positionPtr[i]);
+}
+
+void crs_goToMatchingSection_(int id, int minVal, int maxVal, int reqNumReadings)
+{
+  int numMatchingVals;
+  int potVal;
+  int potLine;
+  ContinuousRotationServo * target;
+
+  // Get common information loaded
+  target = crs_getInstance(id);
+  potLine = target->potLine;
+
+  // Find section
+  numMatchingVals = 0;
+  while(numMatchingVals < reqNumReadings)
+  {
+    potVal = analogRead(potLine);
+    if(minVal <= potVal && potVal <= maxVal)
+      numMatchingVals++;
+    else
+      numMatchingVals = 0;
+    delay(SHORT_CALIBRATION_DUR);
+  }
+}
+
+void crs_exhaustMatchingSection_(int id, int minVal, int maxVal)
+{
+  int potVal;
+  int potLine;
+  ContinuousRotationServo * target;
+
+  // Get common information loaded
+  target = crs_getInstance(id);
+  potLine = target->potLine;
+
+  // Exhaust section
+  do
+  {
+    potVal = analogRead(potLine);
+    delay(SHORT_CALIBRATION_DUR);
+  }
+  while(MIN_HIGH_VAL <= potVal && potVal <= MAX_HIGH_VAL);
+}
+
+void crs_calibrate_(int id)
+{
+  int x1;
+  int y1;
+  int x2;
+  int y2;
+  long lastPos;
+  int deltaPos;
+  int potLine;
+  int potVal;
+  int currentVel;
+  int numMatchingVals;
+  byte multiplier;
+  boolean backwards;
+  ContinuousRotationServo * target;
+
+  // Get common information loaded
+  target = crs_getInstance(id);
+  potLine = target->potLine;
+
+  // Set small starting velocity
+  lastPos = analogRead(potLine);
+  currentVel = START_CALIBRATION_VEL;
+  do
+  {
+    currentVel++;
+    crs_setVelocity_(id, currentVel);
+    delay(SHORT_CALIBRATION_DUR);
+    deltaPos = analogRead(potLine) - lastPos;
+  }
+  while(deltaPos != 0);
+
+  // Wait for segment of high
+  crs_goToMatchingSection_(id, MIN_HIGH_VAL, MAX_HIGH_VAL, 
+    REQUIRED_NUM_MATCHING_VALS);
+
+  // Get out of high range
+  crs_exhaustMatchingSection_(id, MIN_HIGH_VAL, MAX_HIGH_VAL);
+
+  // Check for low values in order to correct for servos 
+  // that go backwards (high values go in negative dir)
+  potVal = analogRead(potLine);
+  backwards = MIN_LOW_VAL <= potVal && potVal <= MAX_LOW_VAL;
+  if(backwards)
+    target->velocitySlope *= -1;
+
+  // Go back to clean section (if backwards)
+  if(backwards)
+  {
+    crs_setVelocity_(id, currentVel);
+
+    crs_goToMatchingSection_(id, MIN_HIGH_VAL, MAX_HIGH_VAL, 
+      REQUIRED_NUM_MATCHING_VALS);
+
+    crs_exhaustMatchingSection_(id, MIN_HIGH_VAL, MAX_HIGH_VAL);
+  }
+
+  // Record as zero
+  target->position = 0;
+
+  // Change speed until delta position = 0
+  numMatchingVals = 0;
+  lastPos = analogRead(potLine);
+  do
+  {
+    if(deltaPos == 0)
+    {
+      numMatchingVals++;
+    }
+    else
+    {
+      if(deltaPos > 0)
+        currentVel--;
+      else
+        currentVel++;
+
+      Serial.print("Velocity: ");
+      Serial.print(currentVel);
+      Serial.print(" Delta: ");
+      Serial.print(deltaPos);
+      Serial.print("\n");
+
+      numMatchingVals = 0;
+      crs_setVelocity_(id, currentVel);
+    }
+  }
+  while(numMatchingVals < REQUIRED_NUM_MATCHING_VALS);
+  
+  // Update servo internals
+  target->zeroValue = currentVel;
+
+  // Record zero and values for x1 and y1
+  x1 = currentVel;
+  y1 = 0;
+
+  // Zero position
+  target->position = 0;
+  target->targetPosition = 0;
+
+  // Try another velocity for x2 and y2
+  crs_setVelocity(id, START_CALIBRATION_VEL);
+  delay(100);
+
+  // Calculate slope
+  target->targetVel = ((float)(y2-y1))/(x2-x1);
+
+  // Go back
+  crs_setVelocity(id, -START_CALIBRATION_VEL);
+  delay(100);
+
+  // Go back to zero
+  //crs_startMovingTo(0, 0);
+}
+
+void crs_setVelocity_(int id, int velocity)
+{
+  ContinuousRotationServo * target = crs_getInstance(id);
+  globalServo.attach(target->controlLine);
+  globalServo.write(crs_convertVelocityToRaw_(id, velocity));
+}
+
+void crs_correctPos_(int id)
+{
+
 }
 
 LimitedRotationServo * lrs_getInstance(int id)
@@ -73,7 +352,7 @@ int piezo_isFired(int id)
   int val = analogRead(line);
 
   if(val < PIEZO_MIN_TAP_VAL)
-    return 0;
+    return NO_TAP;
   else
     return val;
 }
@@ -157,6 +436,12 @@ void jellyfish_raise(int id)
   Jellyfish * jellyfish = jellyfish_getInstance(id);
   lrs_setAngle(jellyfish->servoNum, JELLYFISH_RAISED_ANGLE);
   led_turnOff(jellyfish->ledNum);
+}
+
+void jellyfish_step(int id, long ms)
+{
+    Jellyfish * jellyfish = jellyfish_getInstance(id);
+    lrs_step(jellyfish->servoNum, ms);
 }
 
 Fish * fish_getInstance(int id)
@@ -308,4 +593,168 @@ void fish_goToNextInternalGoal_(int id)
   // Update z goal
   newGoalZ = (long)(newGoalGeneral * target->zSpeedPortion + target->startZ);
   crs_startMovingTo(target->zServo, newGoalZ);
+}
+
+void fish_step(int id, long ms)
+{
+    Fish * target = fish_getInstance(id);
+    crs_step(target->xServo, ms);
+    crs_step(target->yServo, ms);
+    crs_step(target->zServo, ms);
+    crs_step(target->thetaServo, ms);
+}
+
+PiezoSensorGroup * pse_getInstance(int id)
+{
+  return &(piezoSensorGroups[id]);
+}
+
+void pse_init(int id, int numSensors);
+{
+  PiezoSensorGroup * target = pse_getInstance(id);
+  target->numSensors = numSensors;
+  target->nextElementIndex = 0;
+  target->sensorsNums = malloc(numSensors * sizeof(SensorGroupMembershipRecord));
+}
+
+void pse_dest(int id);
+{
+  free(target->sensorNums);
+}
+
+void pse_addToSensorList(int id, int sensorID, int sensorHighLevelID){
+{
+  PiezoSensorGroup * target = pse_getInstance(id);
+  int nextElementIndex = target->nextElementIndex;
+
+  SensorGroupMembershipRecord * record = &(target->sensorNums[nextElementIndex]);
+  record->sensorID = sensorID;
+  record->highLevelID = sensorHighLevelID;
+
+  nextElementIndex++;
+}
+
+void pse_getTapped(int id)
+{
+  int i;
+  int sensorID;
+  int sensorVal;
+  int maxSensorRecordIndex;
+  int maxSensorVal;
+  PiezoSensorGroup * target = pse_getInstance(id);
+    
+  maxSensorRecordIndex = NONE;
+  maxSensorVal = 0;
+  for(i = 0; i < target->nextElementIndex; i++)
+  {
+    sensorID = target->sensorNums[i].sensorID;
+    sensorVal = peizo_isFired(sensorID);
+    if(sensorVal > 0 && sensorVal > maxSensorVal)
+    {
+      maxSensorVal = sensorVal;
+      maxSensorRecordIndex = i;
+    }
+  }
+
+  if(maxSensorRecordIndex != NONE)
+    return NONE
+  else
+    return target->sensorNums[maxSensorRecordIndex].highLevelID;
+}
+
+Aquarium * aquarium_getInstance(int id)
+{
+  return &(aquariums[id]);
+}
+
+void aquarium_init(int id, int fishNum, int jellyfishNum, int lightSensorNum
+                   int piezeoSensorGroupNum)
+{
+  Aquarium * target = aquarium_getInstance(id);
+    
+  // Save simple attributes
+  target->fishNum = fishNum;
+  target->jellyfishNum = jellyfishNum;
+  target->lightSensorNum = lightSensorNum;
+  target->piezoSensorGroupNum = piezoSensorGroupNum;
+
+  // Setup necessary state for time keeping
+  target->lastMS = millis();
+  target->shortMSRemain = SHORT_TIME_STEP;
+  target->longMSRemain = LONG_TIME_STEP;
+}
+
+void aquarium_shortStep(int id, long ms)
+{
+  int tappedSensor;
+  bool curLight;
+  Aquarium * target;
+  PiezoSensorGroup * piezoGroup;
+  LightSensor * lightSensor;
+
+  // Get necessary instances
+  target = aquarium_getInstance(id);
+    
+  // Check sensors
+  tappedSensor = pse_getTapped(target->piezoSensorGroupNum);
+  curLight = ls_isLight(target->lightSensorNum);
+
+  // Respond to tap
+  if(tappedSensor != NONE)
+      aquarium_runFishToOpposingSide_(id, tappedSensor);
+
+  // Repond to light
+  if(curLight != aquarium->isLight) // If the light sensor state has changed
+  {
+    aquarium->isLight = curLight;
+    
+    if(curLight)
+      aquarium_transitionToFishState_(id);
+    else
+      aquarium_transitionToJellyfishState_(id);
+  }
+}
+
+void aquarium_longStep(int id, long ms)
+{
+  Aquarium * target = aquarium_getInstance(id);
+
+  jellyfish_step(target->jellyfishNum, ms);
+  fish_step(target->fishNum, ms);
+}
+
+void aquarium_tick(int id, long newMS)
+{
+  Aquarium * target;
+  long deltaMS;
+  long newShortMSRemain;
+  long newLongMSRemain;
+
+  target = aquarium_getInstance(id);
+  deltaMS = newMS - target->lastMS;
+  newShortMSRemain = target->shortMSRemain + deltaMS;
+  newLongMSRemain = target->longMSRemain + deltaMS;
+  
+  // Check if long step was fired
+  if(newLongMSRemain < 0)
+  {
+    aquarium_longStep(id, LONG_TIME_STEP - newLongMSRemain);
+    newLongMSRemain = LONG_TIME_STEP;
+  }
+  target->longMSRemain = newLongMSRemain;
+
+  // Check if short step was fired
+  if(newShortMSRemain < 0)
+  {
+    aquarium_shortStep(id, SHORT_TIME_STEP - newShortMSRemain);
+    newShortMSRemain = SHORT_TIME_STEP;
+  }
+  target->shortMSRemain = newShortMSRemain;
+
+  target->lastMS = newMS;
+}
+
+void aquarium_onFishReachedGoal(int id, int fishID)
+{
+  
 }
