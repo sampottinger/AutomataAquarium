@@ -203,7 +203,7 @@ void crs_calibrate_(int id)
   int i;
   ContinuousRotationServo * target;
   
-  //Serial.print("here!\n");
+  Serial.print("here!\n");
 
   // Get common information loaded
   target = crs_getInstance(id);
@@ -219,7 +219,7 @@ void crs_calibrate_(int id)
     delay(SHORT_CALIBRATION_DUR);
     deltaPos = analogRead(potLine) - lastPos;
   }
-  while(deltaPos != 0);
+  while(deltaPos == 0);
   
   Serial.print("Found starting velocity.\n");
 
@@ -231,6 +231,8 @@ void crs_calibrate_(int id)
   {
     delay(SHORT_CALIBRATION_DUR);
     potVal = analogRead(potLine);
+    Serial.print(potVal);
+    Serial.print("\n");
     consistent = (increasing && potVal >= lastVal) || (!increasing && potVal <= lastVal);
     if(MIN_TRUSTED_VALUE <= potVal && potVal <= MAX_TRUSTED_VALUE && consistent)
       numMatchingVals++;
@@ -247,6 +249,9 @@ void crs_calibrate_(int id)
 
 void crs_setVelocity_(int id, int velocity)
 {
+  Serial.print("Setting velocity to ");
+  Serial.print(velocity);
+  Serial.print(".\n");
   ContinuousRotationServo * target = crs_getInstance(id);
   globalServo.attach(target->controlLine);
   globalServo.write(crs_convertVelocityToRaw_(id, velocity));
