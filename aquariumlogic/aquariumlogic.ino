@@ -35,7 +35,7 @@ void crs_init(int id, byte controlLine, byte potLine, boolean zero)
 
   target->controlLine = controlLine;
   target->potLine = potLine;
-  target->zeroValue = PRE_CALIBRATION_ZERO_VALUE;
+  target->zeroValue = PRE_CALIBRATION_ZERO_VAL;
   target->position = PRE_CALIBRATION_POSITION;
   target->targetPosition = PRE_CALIBRATION_POSITION;
   target->targetVel = STARTING_TARGET_VELOCITY;
@@ -184,19 +184,26 @@ void crs_exhaustMatchingSection_(int id, int minVal, int maxVal)
 
 void crs_calibrate_(int id)
 {
-  int x1;
-  int y1;
-  int x2;
-  int y2;
   long lastPos;
   int deltaPos;
   int potLine;
   int potVal;
+  int deltaTotals;
+  int lastVal;
   int currentVel;
   int numMatchingVals;
   byte multiplier;
-  boolean backwards;
+  boolean consistent;
+  boolean increasing;
+  boolean inReverse;
+  int raw1;
+  int speed1;
+  int raw2;
+  int speed2;
+  int i;
   ContinuousRotationServo * target;
+  
+  //Serial.print("here!\n");
 
   // Get common information loaded
   target = crs_getInstance(id);
@@ -213,87 +220,29 @@ void crs_calibrate_(int id)
     deltaPos = analogRead(potLine) - lastPos;
   }
   while(deltaPos != 0);
+  
+  Serial.print("Found starting velocity.\n");
 
-  // Wait for segment of high
-  crs_goToMatchingSection_(id, MIN_HIGH_VAL, MAX_HIGH_VAL, 
-    REQUIRED_NUM_MATCHING_VALS);
-
-  // Get out of high range
-  crs_exhaustMatchingSection_(id, MIN_HIGH_VAL, MAX_HIGH_VAL);
-
-  // Check for low values in order to correct for servos 
-  // that go backwards (high values go in negative dir)
-  potVal = analogRead(potLine);
-  backwards = MIN_LOW_VAL <= potVal && potVal <= MAX_LOW_VAL;
-  if(backwards)
-    target->velocitySlope *= -1;
-
-  // Go back to clean section (if backwards)
-  if(backwards)
-  {
-    crs_setVelocity_(id, currentVel);
-
-    crs_goToMatchingSection_(id, MIN_HIGH_VAL, MAX_HIGH_VAL, 
-      REQUIRED_NUM_MATCHING_VALS);
-
-    crs_exhaustMatchingSection_(id, MIN_HIGH_VAL, MAX_HIGH_VAL);
-  }
-
-  // Record as zero
-  target->position = 0;
-
-  // Change speed until delta position = 0
+  // Wait for reliable segment
   numMatchingVals = 0;
-  lastPos = analogRead(potLine);
-  do
+  lastVal = analogRead(potLine);
+  increasing = true;
+  while(numMatchingVals < REQUIRED_NUM_MATCHING_VALS_LOOSE)
   {
-    if(deltaPos == 0)
-    {
+    delay(SHORT_CALIBRATION_DUR);
+    potVal = analogRead(potLine);
+    consistent = (increasing && potVal >= lastVal) || (!increasing && potVal <= lastVal);
+    if(MIN_TRUSTED_VALUE <= potVal && potVal <= MAX_TRUSTED_VALUE && consistent)
       numMatchingVals++;
-    }
     else
     {
-      if(deltaPos > 0)
-        currentVel--;
-      else
-        currentVel++;
-
-      Serial.print("Velocity: ");
-      Serial.print(currentVel);
-      Serial.print(" Delta: ");
-      Serial.print(deltaPos);
-      Serial.print("\n");
-
       numMatchingVals = 0;
-      crs_setVelocity_(id, currentVel);
+      increasing = potVal > lastVal;
     }
+    lastVal = potVal;
   }
-  while(numMatchingVals < REQUIRED_NUM_MATCHING_VALS);
-  
-  // Update servo internals
-  target->zeroValue = currentVel;
-
-  // Record zero and values for x1 and y1
-  x1 = currentVel;
-  y1 = 0;
-
-  // Zero position
-  target->position = 0;
-  target->targetPosition = 0;
-
-  // Try another velocity for x2 and y2
-  crs_setVelocity(id, START_CALIBRATION_VEL);
-  delay(100);
-
-  // Calculate slope
-  target->targetVel = ((float)(y2-y1))/(x2-x1);
-
-  // Go back
-  crs_setVelocity(id, -START_CALIBRATION_VEL);
-  delay(100);
-
-  // Go back to zero
-  //crs_startMovingTo(0, 0);
+    
+  Serial.print("Found linear segment.\n");
 }
 
 void crs_setVelocity_(int id, int velocity)
@@ -609,7 +558,7 @@ PiezoSensorGroup * pse_getInstance(int id)
   return &(piezoSensorGroups[id]);
 }
 
-void pse_init(int id, int numSensors);
+void pse_init(int id, int numSensors)
 {
   PiezoSensorGroup * target = pse_getInstance(id);
   target->numSensors = numSensors;
