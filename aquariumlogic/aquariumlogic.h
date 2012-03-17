@@ -4,6 +4,15 @@
  * Auth: Jessica Ebert, Sam Pottinger, DJ Sutton
 **/
 
+#define NORTH 1
+#define NORTHEAST 2
+#define EAST 3
+#define SOUTHEAST 4
+#define SOUTH 5
+#define SOUTHWEST 6
+#define WEST 7
+#define NORTHWEST 8
+
 #define NUM_CONT_ROT_SERVOS 1
 #define NUM_LIM_ROT_SERVOS 1
 #define NUM_PIEZO_SENSORS 1
@@ -16,7 +25,7 @@
 
 #define MIN_LIGHT_VAL 100
 #define PIEZO_MIN_TAP_VAL 50
-#define NO_TAP
+#define NO_TAP -1
 
 #define NONE -1
 
@@ -49,9 +58,22 @@
 #define SHORT_CALIBRATION_DUR 10
 #define START_CALIBRATION_VEL 50
 
+#define MIN_FISH_SPEED 0
+#define MAX_FISH_SPEED 50
+#define MIN_X_VAL -102400
+#define MAX_X_VAL 102400
+#define MIN_Y_VAL -102400
+#define MAX_Y_VAL 102400
+#define MIN_Z_VAL -102400
+#define MAX_Z_VAL 102400
+#define CENTRAL_X_VAL 0
+#define CENTRAL_Y_VAL 0
+
 #define MS_PER_SEC 1000
 
 #define NUM_STEPS_PER_RAD 0.00306796158
+
+#define RAND_AIN_PORT 0
 
 #include <Arduino.h>
 #include <math.h>
@@ -218,11 +240,12 @@ void lrs_init(int id, byte controlLine);
 void lrs_setAngle(int id, int angle);
 
 /**
- * Name: lrs_step(int id)
+ * Name: lrs_step(int id, long ms)
  * Desc: Has this limited rotation servo update interal state
  * Para: id, The unique id of the servo to operate on
+ *       ms, The number of milliseconds since this was last called
 **/
-void lrs_step(int id);
+void lrs_step(int id, long ms);
 
 // Piezo sensor abstraction
 typedef struct
@@ -459,6 +482,14 @@ void fish_goToNextInternalGoal_(int id);
 **/
 void fish_step(int id, long ms);
 
+/**
+ * Name: fish_setVelocity(int id, float velocity)
+ * Desc: Set the target (single axis max) velocity for this fish
+ * Para: id, The unique numerical id of the fish to set the target velocity for
+ *       velocity, The max velocity to use for this fish
+**/
+void fish_setVelocity(int id, float velocity);
+
 // Piezo sensor group abstraction
 typedef struct
 {
@@ -470,10 +501,8 @@ typedef struct
 {
   int numSensors;
   int nextElementIndex;
-  SensorGroupMembershipRecord sensorNums;
+  SensorGroupMembershipRecord * sensorNums;
 } PiezoSensorGroup;
-
-PizeoSensorGroup piezoSensorGroups[NUM_PIEZO_SENSOR_GROUPS]
 
 /**
  * Name: pse_getInstance(int id)
@@ -483,7 +512,7 @@ PizeoSensorGroup piezoSensorGroups[NUM_PIEZO_SENSOR_GROUPS]
  *           get
  * Retr: Pointer to instance
 **/
-PiezoSensorGroup * pse_getInstance(int id);
+PiezoSensorGroup * psg_getInstance(int id);
 
 /**
  * Name: pse_init(int id, int numSensors)
@@ -491,14 +520,14 @@ PiezoSensorGroup * pse_getInstance(int id);
  * Para: id, The unique numerical id of this sensor group
  *       numSensors, The number of sensors in this group
 **/
-void pse_init(int id, int numSensors);
+void psg_init(int id, int numSensors);
 
 /**
  * Name: pse_dest(int id)
  * Desc: Destructs support structures for the given piezo sensor group
  * Para: id, The unique numerical id of the sensor group to deallocate
 **/
-void pse_dest(int id);
+void psg_dest(int id);
 
 /**
  * Name: pse_addToSensorList(int id, int sensorID)
@@ -507,7 +536,7 @@ void pse_dest(int id);
  *       sensorID, The id of the sensor to add to this group
  *       sensorHighLevelID, The int to return when this sensor is fired
 **/
-void pse_addToSensorList(int id, int sensorID, int sensorHighLevelID);
+void psg_addToSensorList(int id, int sensorID, int sensorHighLevelID);
 
 /**
  * Name: pse_getTapped(int id)
@@ -515,7 +544,7 @@ void pse_addToSensorList(int id, int sensorID, int sensorHighLevelID);
  * Para: id, The unique numerical id of the group to operate on
  * Retr: NONE or high level id of sensor that indicated a tap
 **/
-int pse_getTapped(int id);
+int psg_getTapped(int id);
 
 // Aquarium abstraction
 
@@ -524,12 +553,12 @@ typedef struct
   int fishNum;
   int jellyfishNum;
   int lightSensorNum;
-  int piezeoSensorGroupNum;
+  int piezoSensorGroupNum;
   bool isLight;
   long lastMS;
+  long shortMSRemain;
+  long longMSRemain;
 } Aquarium;
-
-Aquarium aquariums[NUM_AQUARIUMS];
 
 /**
  * Name: pse_getInstance(int id)
@@ -619,3 +648,30 @@ void aquarium_transitionToFishState_(int id);
  * Para: id, The id of the aquarium to operate on
 **/
 void aquarium_transitionToJellyfishState_(int id);
+
+/**
+ * Name: aquarium_getOpposingDirection_(int direction)
+ * Desc: Get the cardinal direction that opposes the given direction
+ * Para: id, the unique id of the aquarium to calculate this direction in
+ *       dir, The direction for which the opposite direction is desired
+ * Retr: Constant corresponding to the given direction
+**/
+int aquarium_getOpposingDirection_(int id, int dir);
+
+/**
+ * Name: aquarium_getXBoundInDirection_(int id, int direction)
+ * Desc: Get the farthest x value in the given direction
+ * Para: id, The unique id of the aquarium to calculate this x position in
+ *       direction, The direction in which the extreme x value is requested
+ * Retr: Extreme x position in direction
+**/
+int aquarium_getXBoundInDirection_(int id, int direction);
+
+/**
+ * Name: aquarium_getYBoundInDirection_(int id, int direction)
+ * Desc: Get the farthest y value in the given direction
+ * Para: id, The unique id of the aquarium to calculate this y position in
+ *       direction, The direction in which the extreme y value is requested
+ * Retr: Extreme y position in direction
+**/
+int aquarium_getYBoundInDirection_(int id, int direction);
