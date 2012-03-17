@@ -508,7 +508,7 @@ typedef struct
 } PiezoSensorGroup;
 
 /**
- * Name: pse_getInstance(int id)
+ * Name: psg_getInstance(int id)
  * Desc: Gets the piezeo sensor group instance corresponding to
  *       the given id
  * Para: id, The unique numerical id of the instance to
@@ -518,7 +518,7 @@ typedef struct
 PiezoSensorGroup * psg_getInstance(int id);
 
 /**
- * Name: pse_init(int id, int numSensors)
+ * Name: psg_init(int id, int numSensors)
  * Desc: Initialize this sensor group's internal state
  * Para: id, The unique numerical id of this sensor group
  *       numSensors, The number of sensors in this group
@@ -526,14 +526,14 @@ PiezoSensorGroup * psg_getInstance(int id);
 void psg_init(int id, int numSensors);
 
 /**
- * Name: pse_dest(int id)
+ * Name: psg_dest(int id)
  * Desc: Destructs support structures for the given piezo sensor group
  * Para: id, The unique numerical id of the sensor group to deallocate
 **/
 void psg_dest(int id);
 
 /**
- * Name: pse_addToSensorList(int id, int sensorID)
+ * Name: psg_addToSensorList(int id, int sensorID)
  * Desc: Adds a new piezo sensor to this group
  * Para: id, The unique numerical id of the group to operate on
  *       sensorID, The id of the sensor to add to this group
@@ -542,7 +542,7 @@ void psg_dest(int id);
 void psg_addToSensorList(int id, int sensorID, int sensorHighLevelID);
 
 /**
- * Name: pse_getTapped(int id)
+ * Name: psg_getTapped(int id)
  * Desc: Get the sensor that shows a "tapped state"
  * Para: id, The unique numerical id of the group to operate on
  * Retr: NONE or high level id of sensor that indicated a tap
@@ -564,7 +564,7 @@ typedef struct
 } Aquarium;
 
 /**
- * Name: pse_getInstance(int id)
+ * Name: psg_getInstance(int id)
  * Desc: Gets the aquarium instance corresponding to
  *       the given id
  * Para: id, The unique numerical id of the instance to

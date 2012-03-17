@@ -553,27 +553,28 @@ void fish_step(int id, long ms)
     crs_step(target->thetaServo, ms);
 }
 
-PiezoSensorGroup * pse_getInstance(int id)
+PiezoSensorGroup * psg_getInstance(int id)
 {
   return &(piezoSensorGroups[id]);
 }
 
-void pse_init(int id, int numSensors)
+void psg_init(int id, int numSensors)
 {
-  PiezoSensorGroup * target = pse_getInstance(id);
+  PiezoSensorGroup * target = psg_getInstance(id);
   target->numSensors = numSensors;
   target->nextElementIndex = 0;
-  target->sensorsNums = malloc(numSensors * sizeof(SensorGroupMembershipRecord));
+  target->sensorNums = (SensorGroupMembershipRecord *)(malloc(numSensors * sizeof(SensorGroupMembershipRecord)));
 }
 
-void pse_dest(int id);
+void psg_dest(int id)
 {
+  PiezoSensorGroup * target = psg_getInstance(id);
   free(target->sensorNums);
 }
 
-void pse_addToSensorList(int id, int sensorID, int sensorHighLevelID){
+void psg_addToSensorList(int id, int sensorID, int sensorHighLevelID)
 {
-  PiezoSensorGroup * target = pse_getInstance(id);
+  PiezoSensorGroup * target = psg_getInstance(id);
   int nextElementIndex = target->nextElementIndex;
 
   SensorGroupMembershipRecord * record = &(target->sensorNums[nextElementIndex]);
@@ -583,21 +584,21 @@ void pse_addToSensorList(int id, int sensorID, int sensorHighLevelID){
   nextElementIndex++;
 }
 
-void pse_getTapped(int id)
+int psg_getTapped(int id)
 {
   int i;
   int sensorID;
   int sensorVal;
   int maxSensorRecordIndex;
   int maxSensorVal;
-  PiezoSensorGroup * target = pse_getInstance(id);
+  PiezoSensorGroup * target = psg_getInstance(id);
     
   maxSensorRecordIndex = NONE;
   maxSensorVal = 0;
   for(i = 0; i < target->nextElementIndex; i++)
   {
     sensorID = target->sensorNums[i].sensorID;
-    sensorVal = peizo_isFired(sensorID);
+    sensorVal = piezo_isFired(sensorID);
     if(sensorVal > 0 && sensorVal > maxSensorVal)
     {
       maxSensorVal = sensorVal;
@@ -606,7 +607,7 @@ void pse_getTapped(int id)
   }
 
   if(maxSensorRecordIndex != NONE)
-    return NONE
+    return NONE;
   else
     return target->sensorNums[maxSensorRecordIndex].highLevelID;
 }
@@ -616,8 +617,8 @@ Aquarium * aquarium_getInstance(int id)
   return &(aquariums[id]);
 }
 
-void aquarium_init(int id, int fishNum, int jellyfishNum, int lightSensorNum
-                   int piezeoSensorGroupNum)
+void aquarium_init(int id, int fishNum, int jellyfishNum, int lightSensorNum,
+                   int piezoSensorGroupNum)
 {
   Aquarium * target = aquarium_getInstance(id);
     
@@ -645,7 +646,7 @@ void aquarium_shortStep(int id, long ms)
   target = aquarium_getInstance(id);
     
   // Check sensors
-  tappedSensor = pse_getTapped(target->piezoSensorGroupNum);
+  tappedSensor = psg_getTapped(target->piezoSensorGroupNum);
   curLight = ls_isLight(target->lightSensorNum);
 
   // Respond to tap
@@ -653,9 +654,9 @@ void aquarium_shortStep(int id, long ms)
       aquarium_runFishToOpposingSide_(id, tappedSensor);
 
   // Repond to light
-  if(curLight != aquarium->isLight) // If the light sensor state has changed
+  if(curLight != target->isLight) // If the light sensor state has changed
   {
-    aquarium->isLight = curLight;
+    target->isLight = curLight;
     
     if(curLight)
       aquarium_transitionToFishState_(id);
