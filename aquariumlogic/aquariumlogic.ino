@@ -16,10 +16,14 @@ Aquarium aquariums[NUM_AQUARIUMS];
 
 void setup()
 {
+  Serial.begin(9600);
+  crs_init(0, 9, 0, true);
 }
 
 void loop()
 {
+  crs_step(0, 100);
+  delay(100);
 }
 
 ContinuousRotationServo * crs_getInstance(int id)
@@ -40,7 +44,7 @@ void crs_init(int id, byte controlLine, byte potLine, boolean zero)
   target->velocitySlope = DEFAULT_VELOCITY_SLOPE;
   target->inTrustedArea = false;
   target->numMatchingVals = 0;
-  target->correctionLastVel = readAnalog(potLine);
+  target->correctionLastVal = analogRead(potLine);
 
   if(!zero)
     crs_loadPosition_(id);
@@ -73,8 +77,9 @@ void crs_step(int id, long ms)
 {
   long delta;
   ContinuousRotationServo * target;
-
-  crs_correct_pos_(id);
+  
+  if(target->targetVel != 0)
+    crs_correctPos_(id);
 
   target = crs_getInstance(id);
   delta = target->targetPosition - target->position;
@@ -257,8 +262,6 @@ void crs_calibrate_(int id)
   estimatedZeroVal = 1500;
   estimatedVelocity = estimatedSlope * currentVel + estimatedZeroVal;
   
-  crs_setVelocity_(id, currentVel); // TODO: Remove useless code -- does nothing but output debug
-  
   // Observe at first speed
   potVal1 = analogRead(potLine);
   delay(100);
@@ -267,7 +270,7 @@ void crs_calibrate_(int id)
   speed1 = currentVel;
   raw1 = deltaPos; // / 300.0; // TODO: constant for slope find delay time (50)
   
-  currentVel -= 3;
+  currentVel -= 3; // TODO: Constant
   
   finished = false;
   while(!finished)
@@ -309,9 +312,6 @@ void crs_calibrate_(int id)
     delay(10);
     potVal = analogRead(potLine);
     deltaPos = potVal - lastVal;
-    
-    Serial.print(deltaPos);
-    Serial.print("\n");
     
     if(deltaPos == 0)
     {
@@ -357,10 +357,12 @@ void crs_setVelocity_(int id, int velocity)
 
 void crs_correctPos_(int id)
 {
-  Target * target = crs_getInstance(id);
-  int currentVal = readAnalog(target->potLine);
+  ContinuousRotationServo * target = crs_getInstance(id);
+  int currentVal = analogRead(target->potLine);
   int lastVal = target->correctionLastVal;
   boolean increasing = target->targetVel > 0;
+  int numMatchingVals = target->numMatchingVals;
+  boolean consistent;
   
   // If in trusted zone, make sure we are still there and correct pos
   if(target->inTrustedArea)
@@ -373,17 +375,21 @@ void crs_correctPos_(int id)
     // See if we have a matching value
     consistent = (increasing && currentVal >= lastVal) || (!increasing && currentVal <= lastVal);
     if(MIN_TRUSTED_VALUE <= currentVal && currentVal <= MAX_TRUSTED_VALUE && consistent)
-      target->numMatchingVals++;
+      numMatchingVals++;
     else
     {
-      target->numMatchingVals -= abs(currentVal - lastVal)/2;
+      numMatchingVals -= abs(currentVal - lastVal)/2;
       if(numMatchingVals < 0)
         numMatchingVals = 0;
     }
     target->correctionLastVal = currentVal;
 
     // Test to see if we made it
-    target->inTrustedArea = target->numMatchingVals > REQUIRED_NUM_MATCHING_VALS;
+    Serial.print("Num matching vals: ");
+    Serial.print(numMatchingVals);
+    Serial.print("\n");
+    target->inTrustedArea = numMatchingVals > REQUIRED_NUM_MATCHING_VALS;
+    target->numMatchingVals = numMatchingVals;
   }
 }
 
@@ -706,14 +712,6 @@ void psg_addToSensorList(int id, int sensorID, int sensorHighLevelID)
 {
   PiezoSensorGroup * target = psg_getInstance(id);
   int nextElementIndex = target->nextElementIndex;
-  
-  Serial.print("Adding ");
-  Serial.print(sensorID);
-  Serial.print(" at ");
-  Serial.print(nextElementIndex);
-  Serial.print(" with ");
-  Serial.print(sensorHighLevelID);
-  Serial.print(".\n");
 
   SensorGroupMembershipRecord * record = &(target->sensorNums[nextElementIndex]);
   record->sensorID = sensorID;
