@@ -38,6 +38,9 @@ void crs_init(int id, byte controlLine, byte potLine, boolean zero)
   target->targetPosition = PRE_CALIBRATION_POSITION;
   target->targetVel = STARTING_TARGET_VELOCITY;
   target->velocitySlope = DEFAULT_VELOCITY_SLOPE;
+  target->inTrustedArea = false;
+  target->numMatchingVals = 0;
+  target->correctionLastVel = readAnalog(potLine);
 
   if(!zero)
     crs_loadPosition_(id);
@@ -71,7 +74,7 @@ void crs_step(int id, long ms)
   long delta;
   ContinuousRotationServo * target;
 
-  //crs_correct_pos_(id);
+  crs_correct_pos_(id);
 
   target = crs_getInstance(id);
   delta = target->targetPosition - target->position;
@@ -234,8 +237,6 @@ void crs_calibrate_(int id)
   {
     delay(SHORT_CALIBRATION_DUR);
     potVal = analogRead(potLine);
-    Serial.print(potVal);
-    Serial.print("\n");
     consistent = (increasing && potVal >= lastVal) || (!increasing && potVal <= lastVal);
     if(MIN_TRUSTED_VALUE <= potVal && potVal <= MAX_TRUSTED_VALUE && consistent)
       numMatchingVals++;
@@ -356,7 +357,34 @@ void crs_setVelocity_(int id, int velocity)
 
 void crs_correctPos_(int id)
 {
+  Target * target = crs_getInstance(id);
+  int currentVal = readAnalog(target->potLine);
+  int lastVal = target->correctionLastVal;
+  boolean increasing = target->targetVel > 0;
+  
+  // If in trusted zone, make sure we are still there and correct pos
+  if(target->inTrustedArea)
+  {
+      // TODO: Pick back up here!
+  }
+  // Otherwise, see if we are getting there
+  else
+  {
+    // See if we have a matching value
+    consistent = (increasing && currentVal >= lastVal) || (!increasing && currentVal <= lastVal);
+    if(MIN_TRUSTED_VALUE <= currentVal && currentVal <= MAX_TRUSTED_VALUE && consistent)
+      target->numMatchingVals++;
+    else
+    {
+      target->numMatchingVals -= abs(currentVal - lastVal)/2;
+      if(numMatchingVals < 0)
+        numMatchingVals = 0;
+    }
+    target->correctionLastVal = currentVal;
 
+    // Test to see if we made it
+    target->inTrustedArea = target->numMatchingVals > REQUIRED_NUM_MATCHING_VALS;
+  }
 }
 
 LimitedRotationServo * lrs_getInstance(int id)

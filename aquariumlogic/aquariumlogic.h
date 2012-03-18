@@ -116,6 +116,9 @@ typedef struct
   long position; // Zerored at calibration
   long targetPosition;
   boolean decreasing;
+  boolean inTrustedArea;
+  int numMatchingVals;
+  int correctionLastVal;
   int targetVel;
   double velocitySlope; // From calibration
 } ContinuousRotationServo;
