@@ -15,7 +15,7 @@
 
 #define NUM_CONT_ROT_SERVOS 1
 #define NUM_LIM_ROT_SERVOS 1
-#define NUM_PIEZO_SENSORS 1
+#define NUM_PIEZO_SENSORS 4
 #define NUM_LIGHT_SENSORS 1
 #define NUM_LED 2
 #define NUM_JELLYFISH 1
@@ -71,6 +71,18 @@
 #define MAX_Z_VAL 102400
 #define CENTRAL_X_VAL 0
 #define CENTRAL_Y_VAL 0
+
+#define NE_SENSOR_ID 0
+#define SE_SENSOR_ID 1
+#define SW_SENSOR_ID 2
+#define NW_SENSOR_ID 3
+#define NUM_DIR_PIEZO_SENSORS 4
+
+// AIN ports
+#define NE_AIN_PORT 0
+#define SE_AIN_PORT 1
+#define SW_AIN_PORT 2
+#define NW_AIN_PORT 3
 
 #define MS_PER_SEC 1000
 
