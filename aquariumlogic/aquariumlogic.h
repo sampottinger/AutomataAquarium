@@ -4,6 +4,7 @@
  * Auth: Jessica Ebert, Sam Pottinger, DJ Sutton
 **/
 
+// Directional constants
 #define NORTH 1
 #define NORTHEAST 2
 #define EAST 3
@@ -13,6 +14,12 @@
 #define WEST 7
 #define NORTHWEST 8
 
+// Axis identification constants
+#define X_AXIS 1
+#define Y_AXIS 2
+#define Z_AXIS 3
+
+// Component listing (how many of each component?)
 #define NUM_CONT_ROT_SERVOS 1
 #define NUM_LIM_ROT_SERVOS 1
 #define NUM_PIEZO_SENSORS 4
@@ -23,33 +30,34 @@
 #define NUM_PIEZO_SENSOR_GROUPS 1
 #define NUM_AQUARIUMS 1
 
+// Sensor tollerance levels
 #define MIN_LIGHT_VAL 100
 #define PIEZO_MIN_TAP_VAL 50
 #define NO_TAP -1
 
+// Generic multi-purpose NONE value
 #define NONE -1
 
+// Jellyfish behavorial constants
 #define JELLYFISH_RAISED_ANGLE 0
 #define JELLYFISH_LOWERED_ANGLE 180
 
+// Fish behavorial constants
+// NOTE: Location and speed constraints below
 #define FISH_SUB_STEPS_TO_GOAL 10
-
-#define X_AXIS 1
-#define Y_AXIS 2
-#define Z_AXIS 3
-
 #define WIGGLE_AMPLITUDE 10
 #define WIGGLE_SPEED 3.14159 // rad / sec
 
+// Aquarium behavior constants
 #define LONG_TIME_STEP 100
 #define SHORT_TIME_STEP 10
 
+// Calibration constants
 #define PRE_CALIBRATION_ZERO_VAL 1500
 #define PRE_CALIBRATION_POSITION 0
 #define STARTING_TARGET_VELOCITY 10
 #define DEFAULT_VELOCITY_SLOPE 1
 #define SIZE_OF_POSITION_VAL 4
-
 #define REQUIRED_NUM_MATCHING_VALS 20
 #define REQUIRED_NUM_MATCHING_VALS_LOOSE 5
 #define MIN_HIGH_VAL 1000 // depricated
@@ -61,6 +69,7 @@
 #define SHORT_CALIBRATION_DUR 10
 #define START_CALIBRATION_VEL 10
 
+// Location and speed constraints
 #define MIN_FISH_SPEED 0
 #define MAX_FISH_SPEED 50
 #define MIN_X_VAL -102400
@@ -72,6 +81,7 @@
 #define CENTRAL_X_VAL 0
 #define CENTRAL_Y_VAL 0
 
+// Piezo sensor ids
 #define NE_SENSOR_ID 0
 #define SE_SENSOR_ID 1
 #define SW_SENSOR_ID 2
