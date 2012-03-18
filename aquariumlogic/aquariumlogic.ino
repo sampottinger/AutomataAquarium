@@ -18,6 +18,8 @@ void setup()
 {
   Serial.begin(9600);
   crs_init(0, 9, 0, true);
+  crs_setTargetVelocity(0, 100);
+  crs_startMovingTo(0, 10000);
 }
 
 void loop()
@@ -78,16 +80,24 @@ void crs_step(int id, long ms)
   long delta;
   ContinuousRotationServo * target;
   
+  target = crs_getInstance(id);
+  
+  // Update expected position
+  target->position += ms * target->targetVel;
+  
+  // Attempt to correct with pot
   if(target->targetVel != 0)
     crs_correctPos_(id);
-
-  target = crs_getInstance(id);
+  
+  // Check on delta
   delta = target->targetPosition - target->position;
-
-  if(target->decreasing && delta >= 0)
+  if(target->targetVel < 0 && delta >= 0)
     crs_onGoalReached(id);
-  else if(!target->decreasing && delta <= 0)
+  else if(target->targetVel > 0 && delta <= 0)
     crs_onGoalReached(id);
+  
+  Serial.print(delta);
+  Serial.print("\n");
 }
 
 void crs_setTargetVelocity(int id, int targetVelocity)
@@ -351,6 +361,8 @@ void crs_setVelocity_(int id, int velocity)
   ContinuousRotationServo * target = crs_getInstance(id);
   globalServo.attach(target->controlLine);
   
+  Serial.print("\nSetting velocity?\n");
+  
   convertedVelocity = crs_convertVelocityToRaw_(id, velocity);
   globalServo.writeMicroseconds(convertedVelocity);
 }
@@ -363,11 +375,23 @@ void crs_correctPos_(int id)
   boolean increasing = target->targetVel > 0;
   int numMatchingVals = target->numMatchingVals;
   boolean consistent;
+  int numStepsIntoRot;
+  int deltaSteps;
   
   // If in trusted zone, make sure we are still there and correct pos
   if(target->inTrustedArea)
   {
-      // TODO: Pick back up here!
+    // Make sure we are still in trusted range
+    if(currentVal >= MIN_TRUSTED_VALUE && currentVal <= MAX_TRUSTED_VALUE)
+    {
+      numStepsIntoRot = target->position % NUM_STEPS_ROT;
+      deltaSteps = currentVal - numStepsIntoRot;
+      target->position += deltaSteps;
+    }
+    else
+    {
+      target->inTrustedArea = false;
+    }
   }
   // Otherwise, see if we are getting there
   else

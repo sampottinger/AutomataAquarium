@@ -99,6 +99,7 @@
 #define MS_PER_SEC 1000
 
 #define NUM_STEPS_PER_RAD 0.00306796158
+#define NUM_STEPS_ROT 2048
 
 #define RAND_AIN_PORT 0
 
