@@ -205,6 +205,8 @@ void crs_calibrate_(int id)
   int estimatedZeroVal;
   float deltaSpeed;
   float estimatedVelocity;
+  float avgSlope;
+  int numSlopesInAvg;
   int i;
   ContinuousRotationServo * target;
 
@@ -248,6 +250,8 @@ void crs_calibrate_(int id)
   }
   
   // Newton's Method
+  avgSlope = 0;
+  numSlopesInAvg = 0;
   estimatedSlope = 1;
   estimatedZeroVal = 1500;
   estimatedVelocity = estimatedSlope * currentVel + estimatedZeroVal;
@@ -279,6 +283,9 @@ void crs_calibrate_(int id)
     estimatedSlope = (raw2 - raw1) / (speed2 - speed1);
     deltaSpeed = raw2 * CALIBRATION_CAUTIOUS_FACTOR / estimatedSlope;
     finished = abs(deltaSpeed) < 1;
+
+    avgSlope = (avgSlope * numSlopesInAvg + estimatedSlope) / (numSlopesInAvg + 1);
+    numSlopesInAvg++;
     
     if(finished)
       break;
@@ -327,17 +334,9 @@ void crs_calibrate_(int id)
   
   // Update zero value
   target->zeroValue += target->velocitySlope * currentVel;
-
-  // Record zero and values for x1 and y1
-  raw1 = 0;
-  speed1 = 0;
-
-  // Try another velocity for x2 and y2
-  //crs_setVelocity_(id, CALIBRATION_VEL_SLOPE_SPEED);
   
-  // Calculate slope
-
-  // Go back to zero
+  // Set velocity conversion slope
+  target->velocitySlope = avgSlope;
   
   // Stop
   crs_setVelocity_(id, 0);
