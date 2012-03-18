@@ -200,19 +200,18 @@ void crs_calibrate_(int id)
   boolean increasing;
   boolean inReverse;
   boolean finished;
-  int raw1;
+  float raw1;
   float speed1;
-  int raw2;
+  float raw2;
   float speed2;
   int potVal1;
   int potVal2;
   float estimatedSlope;
   int estimatedZeroVal;
+  float deltaSpeed;
   float estimatedVelocity;
   int i;
   ContinuousRotationServo * target;
-  
-  Serial.print("here!\n");
 
   // Get common information loaded
   target = crs_getInstance(id);
@@ -257,6 +256,7 @@ void crs_calibrate_(int id)
     
   Serial.print("Found linear segment.\n");
   
+  // Newton's Method
   estimatedSlope = 1;
   estimatedZeroVal = 1500;
   estimatedVelocity = estimatedSlope * currentVel + estimatedZeroVal;
@@ -268,15 +268,15 @@ void crs_calibrate_(int id)
   delay(100);
   potVal2 = analogRead(potLine);
   deltaPos = potVal2 - potVal1;
-  raw1 = currentVel;
-  speed1 = deltaPos; // / 300.0; // TODO: constant for slope find delay time (50)
+  speed1 = currentVel;
+  raw1 = deltaPos; // / 300.0; // TODO: constant for slope find delay time (50)
   
   Serial.print("Starting speed for Newton: ");
-  Serial.print(speed1);
+  Serial.print(raw1);
   Serial.print("\n");
   
   currentVel -= 3;
-    
+  
   finished = false;
   while(!finished)
   {
@@ -286,23 +286,22 @@ void crs_calibrate_(int id)
     delay(100);
     potVal2 = analogRead(potLine);
     deltaPos = potVal2 - potVal1;
-    raw2 = currentVel;
-    speed2 = deltaPos; // / 300.0; // TODO: constant for slope find delay time (50)
+    speed2 = currentVel;
+    raw2 = deltaPos; // / 300.0; // TODO: constant for slope find delay time (50)
     
     Serial.print("Speed: ");
-    Serial.print(speed2);
+    Serial.print(raw2);
     Serial.print("\n");
     
-    finished = speed2 == 0;
+    estimatedSlope = (raw2 - raw1) / (speed2 - speed1);
+    deltaSpeed = raw2 * CALIBRATION_CAUTIOUS_FACTOR / estimatedSlope;
+    finished = abs(deltaSpeed) < 1;
     
     if(finished)
       break;
     else
     {
-      estimatedSlope = (speed2 - speed1) / (raw2 - raw1);
-      if(speed2 * 0.75 / estimatedSlope < 1)
-        break;
-      estimatedZeroVal = raw2 - speed2 * 0.75 / estimatedSlope;
+      estimatedZeroVal = speed2 - deltaSpeed;
       raw1 = raw2;
       speed1 = speed2;
       currentVel = estimatedZeroVal;
@@ -318,6 +317,7 @@ void crs_calibrate_(int id)
   
   Serial.print("Starting speed observation.\n");
 
+  // Finish with hill climbing
   // Change speed until delta position = 0
   // within clean section
   numMatchingVals = 0;
