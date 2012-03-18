@@ -199,10 +199,16 @@ void crs_calibrate_(int id)
   boolean consistent;
   boolean increasing;
   boolean inReverse;
+  boolean finished;
   int raw1;
-  int speed1;
+  float speed1;
   int raw2;
-  int speed2;
+  float speed2;
+  int potVal1;
+  int potVal2;
+  float estimatedSlope;
+  int estimatedZeroVal;
+  float estimatedVelocity;
   int i;
   ContinuousRotationServo * target;
   
@@ -222,7 +228,7 @@ void crs_calibrate_(int id)
     delay(SHORT_CALIBRATION_DUR);
     deltaPos = analogRead(potLine) - lastPos;
   }
-  while(deltaPos == 0);
+  while(abs(deltaPos) < 10);
   
   Serial.print("Found starting velocity.\n");
 
@@ -241,7 +247,9 @@ void crs_calibrate_(int id)
       numMatchingVals++;
     else
     {
-      numMatchingVals = 0;
+      numMatchingVals -= abs(potVal - lastVal)/2;
+      if(numMatchingVals < 0)
+        numMatchingVals = 0;
       increasing = potVal > lastVal;
     }
     lastVal = potVal;
@@ -249,12 +257,64 @@ void crs_calibrate_(int id)
     
   Serial.print("Found linear segment.\n");
   
-  // Adjust for backwards
-  if(increasing)
+  estimatedSlope = 1;
+  estimatedZeroVal = 1500;
+  estimatedVelocity = estimatedSlope * currentVel + estimatedZeroVal;
+  
+  crs_setVelocity_(id, currentVel); // TODO: Remove useless code -- does nothing but output debug
+  
+  // Observe at first speed
+  potVal1 = analogRead(potLine);
+  delay(100);
+  potVal2 = analogRead(potLine);
+  deltaPos = potVal2 - potVal1;
+  raw1 = currentVel;
+  speed1 = deltaPos; // / 300.0; // TODO: constant for slope find delay time (50)
+  
+  Serial.print("Starting speed for Newton: ");
+  Serial.print(speed1);
+  Serial.print("\n");
+  
+  currentVel -= 3;
+    
+  finished = false;
+  while(!finished)
   {
-    target->velocitySlope *= -1;
+    // TODO: take care of duplicated code 
     crs_setVelocity_(id, currentVel);
+    potVal1 = analogRead(potLine);
+    delay(100);
+    potVal2 = analogRead(potLine);
+    deltaPos = potVal2 - potVal1;
+    raw2 = currentVel;
+    speed2 = deltaPos; // / 300.0; // TODO: constant for slope find delay time (50)
+    
+    Serial.print("Speed: ");
+    Serial.print(speed2);
+    Serial.print("\n");
+    
+    finished = speed2 == 0;
+    
+    if(finished)
+      break;
+    else
+    {
+      estimatedSlope = (speed2 - speed1) / (raw2 - raw1);
+      if(speed2 * 0.75 / estimatedSlope < 1)
+        break;
+      estimatedZeroVal = raw2 - speed2 * 0.75 / estimatedSlope;
+      raw1 = raw2;
+      speed1 = speed2;
+      currentVel = estimatedZeroVal;
+    }
   }
+  
+  // Try to calculate zero
+  //target->velocitySlope = -(speed2 - speed1) / (raw2 - raw1);
+  
+  // Adjust for backwards
+  //currentVel = 0;
+  //crs_setVelocity_(id, currentVel);
   
   Serial.print("Starting speed observation.\n");
 
@@ -323,6 +383,8 @@ void crs_setVelocity_(int id, int velocity)
   convertedVelocity = crs_convertVelocityToRaw_(id, velocity);
   Serial.print("Setting velocity to ");
   Serial.print(convertedVelocity);
+  Serial.print(" with given ");
+  Serial.print(velocity);
   Serial.print(".\n");
   globalServo.writeMicroseconds(convertedVelocity);
 }
