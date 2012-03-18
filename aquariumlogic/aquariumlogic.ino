@@ -277,7 +277,14 @@ void crs_calibrate_(int id)
     }
     else
     {
-      currentVel -= round(deltaPos / 2.0);
+      if(deltaPos < 0)
+        currentVel++;
+      else
+        currentVel--;
+      if(currentVel > 40)
+        currentVel = 40;
+      else if(currentVel < -40)
+        currentVel = -40;
         
       numMatchingVals = 0;
       Serial.print("High level velocity value: ");
