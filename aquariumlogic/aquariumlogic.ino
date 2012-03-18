@@ -16,32 +16,10 @@ Aquarium aquariums[NUM_AQUARIUMS];
 
 void setup()
 {
-  Serial.begin(9600);
-  
-  // Setup pizeo sensors
-  piezo_init(NE_SENSOR_ID, NE_AIN_PORT);
-  piezo_init(SE_SENSOR_ID, SE_AIN_PORT);
-  piezo_init(SW_SENSOR_ID, SW_AIN_PORT);
-  piezo_init(NW_SENSOR_ID, NW_AIN_PORT);
-  
-  // Setup piezo sensor group
-  psg_init(0, NUM_DIR_PIEZO_SENSORS);
-  psg_addToSensorList(0, NE_SENSOR_ID, NORTHEAST);
-  psg_addToSensorList(0, SE_SENSOR_ID, SOUTHEAST);
-  psg_addToSensorList(0, SW_SENSOR_ID, SOUTHWEST);
-  psg_addToSensorList(0, NW_SENSOR_ID, NORTHWEST);
 }
 
 void loop()
 {
-  int val = psg_getTapped(0);
-  
-  if(val != NONE)
-  {
-    Serial.print("Tap at ");
-    Serial.print(val);
-    Serial.print("\n");
-  }
 }
 
 ContinuousRotationServo * crs_getInstance(int id)
