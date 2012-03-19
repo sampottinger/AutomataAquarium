@@ -17,14 +17,24 @@ Aquarium aquariums[NUM_AQUARIUMS];
 void setup()
 {
   Serial.begin(9600);
+  
   crs_init(0, 9, 0, true);
-  crs_setTargetVelocity(0, 100);
-  crs_startMovingTo(0, 10000);
+  crs_init(1, 10, 1, true);
+  crs_init(2, 11, 2, true);
+  crs_init(3, 12, 3, true);
+  
+  crs_startMovingTo(0, 500);
+  crs_startMovingTo(1, 500);
+  crs_startMovingTo(2, 500);
+  crs_startMovingTo(3, 500);
 }
 
 void loop()
 {
   crs_step(0, 100);
+  crs_step(1, 100);
+  crs_step(2, 100);
+  crs_step(3, 100);
   delay(100);
 }
 
