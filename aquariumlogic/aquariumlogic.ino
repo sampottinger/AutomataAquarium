@@ -18,23 +18,14 @@ void setup()
 {
   Serial.begin(9600);
   
+  Serial.print("Init 1\n");
   crs_init(0, 9, 0, true);
-  crs_init(1, 10, 1, true);
-  crs_init(2, 11, 2, true);
-  crs_init(3, 12, 3, true);
   
-  crs_startMovingTo(0, 500);
-  crs_startMovingTo(1, 500);
-  crs_startMovingTo(2, 500);
-  crs_startMovingTo(3, 500);
+  Serial.print("Finished initalization");
 }
 
 void loop()
 {
-  crs_step(0, 100);
-  crs_step(1, 100);
-  crs_step(2, 100);
-  crs_step(3, 100);
   delay(100);
 }
 
@@ -105,9 +96,6 @@ void crs_step(int id, long ms)
     crs_onGoalReached(id);
   else if(target->targetVel > 0 && delta <= 0)
     crs_onGoalReached(id);
-  
-  Serial.print(delta);
-  Serial.print("\n");
 }
 
 void crs_setTargetVelocity(int id, int targetVelocity)
@@ -371,8 +359,6 @@ void crs_setVelocity_(int id, int velocity)
   ContinuousRotationServo * target = crs_getInstance(id);
   globalServo.attach(target->controlLine);
   
-  Serial.print("\nSetting velocity?\n");
-  
   convertedVelocity = crs_convertVelocityToRaw_(id, velocity);
   globalServo.writeMicroseconds(convertedVelocity);
 }
@@ -419,9 +405,6 @@ void crs_correctPos_(int id)
     target->correctionLastVal = currentVal;
 
     // Test to see if we made it
-    Serial.print("Num matching vals: ");
-    Serial.print(numMatchingVals);
-    Serial.print("\n");
     target->inTrustedArea = numMatchingVals > REQUIRED_NUM_MATCHING_VALS;
     target->numMatchingVals = numMatchingVals;
   }
