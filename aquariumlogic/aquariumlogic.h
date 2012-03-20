@@ -141,14 +141,14 @@ typedef struct
 ContinuousRotationServo * crs_getInstance(int id);
 
 /**
- * Name: crs_init(int id, byte controlLine, byte potLine)
+ * Name: crs_init(int id, byte controlLine, byte potLinem boolean calibrate)
  * Desc: Calibrates and enumerates a cont. rotation servo
  * Para: id, The unique id of the servo to operate on
  *       controlLine, Which line to use for PWM to control the device
  *       potLine, The line where the potentiometer is installed
  *       calibrate, If true, servo's position is reset. If false, loaded from EEPROM
 **/
-void crs_init(int id, byte controlLine, byte potLine, boolean zero);
+void crs_init(int id, byte controlLine, byte potLine, boolean callibrate);
 
 /**
  * Name: crs_startMovingTo(int id, long targetPosition)

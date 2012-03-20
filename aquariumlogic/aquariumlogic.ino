@@ -26,10 +26,18 @@ void setup()
     digitalWrite(i, 0);
   }
   
-  crs_init(0, 9, 0, true);
-  crs_init(1, 10, 1, true);
-  crs_init(2, 11, 2, true);
-  crs_init(3, 12, 3, true);
+  //crs_init(0, 9, 0, true);
+  crs_init(0, 9, 0, false);
+  crs_setVelocity_(0, 100);
+  //crs_init(1, 10, 1, true);
+  crs_init(1, 10, 1, false);
+  crs_setVelocity_(1, 100);
+  //crs_init(2, 11, 2, true);
+  crs_init(2, 11, 2, false);
+  //crs_setVelocity_(1, 100);
+  //crs_init(3, 12, 3, true);
+  crs_init(3, 12, 3, false);
+  //crs_setVelocity_(3, 100);
   
   Serial.print("Finished initalization");
 }
@@ -44,7 +52,7 @@ ContinuousRotationServo * crs_getInstance(int id)
   return &(contRotServos[id]);
 }
 
-void _loadCalibration_init(int id, byte controlLine, byte potLine, boolean zero)
+void crs_init(int id, byte controlLine, byte potLine, boolean calibrate)
 {
   ContinuousRotationServo * target = crs_getInstance(id);
 
@@ -61,10 +69,17 @@ void _loadCalibration_init(int id, byte controlLine, byte potLine, boolean zero)
   
   globalServos[NUM_LIM_ROT_SERVOS + id].attach(target->controlLine);
   
-  if(!zero)
+  if(calibrate)
+  {
+    crs_calibrate_(id);
+    crs_saveCalibration_(id);
+  }
+  else
+  {
     crs_loadCalibration_(id);
-
-  crs_calibrate_(id);
+  }
+  
+  crs_setVelocity_(id, 0);
 }
 
 void crs_startMovingTo(int id, long targetPosition)
@@ -146,11 +161,19 @@ void crs_loadCalibration_(int id)
   dtoPtr = (byte *)&dto;
 
   for(i = 0; i<sizeof(CrsDto); i++)
-    dtoPtr[i] = EEPROM.read(id * SIZE_OF_POSITION_VAL + i);
-
+  {
+    dtoPtr[i] = EEPROM.read(id * sizeof(CrsDto) + i);
+  }
+  Serial.print(dto.position);
+  Serial.print("\n");
   target->position = dto.position;
-  target->zeroVal = dto.zeroVal;
+  Serial.print(dto.zeroValue);
+  Serial.print("\n");
+  target->zeroValue = dto.zeroValue;
+  Serial.print(dto.velocitySlope);
+  Serial.print("\n");
   target->velocitySlope = dto.velocitySlope;
+  Serial.print("===\n");
 }
 
 void crs_saveCalibration_(int id)
@@ -163,12 +186,24 @@ void crs_saveCalibration_(int id)
 
   target = crs_getInstance(id);
   dto.position = target->position;
-  dto.zeroVal = target->zeroVal;
+  Serial.print(dto.position);
+  Serial.print("\n");
+  dto.zeroValue = target->zeroValue;
+  Serial.print(dto.zeroValue);
+  Serial.print("\n");
   dto.velocitySlope = target->velocitySlope;
+  Serial.print(dto.velocitySlope);
+  Serial.print("\n");
   dtoPtr = (byte*)&dto;
+  Serial.print("===\n");
 
-  for(i = 0; i<SIZE_OF_POSITION_VAL; i++)
-    EEPROM.write(id * sizeof(CrsDto) + 1, dtoPtr[i]);
+  for(i = 0; i<sizeof(CrsDto); i++)
+  {
+    Serial.print(dtoPtr[i]);
+    Serial.print("\n");
+    EEPROM.write(id * sizeof(CrsDto) + i, dtoPtr[i]);
+  }
+  Serial.print("===\n");
 }
 
 void crs_goToMatchingSection_(int id, int minVal, int maxVal, int reqNumReadings)
@@ -285,8 +320,8 @@ void crs_calibrate_(int id)
   }
   
   // Newton's Method
-  avgSlope = 0;
-  numSlopesInAvg = 0;
+  //avgSlope = 0;
+  //numSlopesInAvg = 0;
   estimatedSlope = 1;
   estimatedZeroVal = 1500;
   estimatedVelocity = estimatedSlope * currentVel + estimatedZeroVal;
@@ -323,8 +358,8 @@ void crs_calibrate_(int id)
     deltaSpeed = raw2 * CALIBRATION_CAUTIOUS_FACTOR / estimatedSlope;
     finished = abs(deltaSpeed) < 1;
 
-    avgSlope = (avgSlope * numSlopesInAvg + estimatedSlope) / (numSlopesInAvg + 1);
-    numSlopesInAvg++;
+    //avgSlope = (avgSlope * numSlopesInAvg + estimatedSlope) / (numSlopesInAvg + 1);
+    //numSlopesInAvg++;
     
     if(finished)
       break;
@@ -383,7 +418,7 @@ void crs_calibrate_(int id)
   Serial.print("\n");
   
   // Set velocity conversion slope
-  target->velocitySlope = avgSlope;
+  //target->velocitySlope = avgSlope;
   
   // Stop
   crs_setVelocity_(id, 0);
