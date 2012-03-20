@@ -20,7 +20,7 @@
 #define Z_AXIS 3
 
 // Component listing (how many of each component?)
-#define NUM_CONT_ROT_SERVOS 1
+#define NUM_CONT_ROT_SERVOS 4
 #define NUM_LIM_ROT_SERVOS 1
 #define NUM_PIEZO_SENSORS 4
 #define NUM_LIGHT_SENSORS 1
@@ -60,7 +60,7 @@
 #define SIZE_OF_POSITION_VAL 4
 #define CALIBRATION_CAUTIOUS_FACTOR 0.75
 
-#define REQUIRED_NUM_MATCHING_VALS 20
+#define REQUIRED_NUM_MATCHING_VALS 15
 #define REQUIRED_NUM_MATCHING_VALS_LOOSE 4
 #define MIN_HIGH_VAL 1000 // depricated
 #define MAX_HIGH_VAL 1024 // deprectaed
@@ -108,6 +108,13 @@
 #include <stdarg.h>
 
 // Abstraction for continuous rotation servos
+
+typedef struct
+{
+  long position; // Zerored at calibration
+  int zeroValue; // From calibration
+  double velocitySlope; // From calibration
+} CrsDto;
 
 typedef struct
 {

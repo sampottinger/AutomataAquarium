@@ -2,7 +2,7 @@
 #include <Servo.h>
 #include <EEPROM.h>
 
-Servo globalServo; // Shared limited resource servo instance
+Servo globalServos[NUM_LIM_ROT_SERVOS + NUM_CONT_ROT_SERVOS]; // Shared limited resource servo instance
 
 ContinuousRotationServo contRotServos[NUM_CONT_ROT_SERVOS];
 LimitedRotationServo limitedRotationServos[NUM_LIM_ROT_SERVOS];
@@ -16,10 +16,20 @@ Aquarium aquariums[NUM_AQUARIUMS];
 
 void setup()
 {
+  int i;
+  
   Serial.begin(9600);
   
-  Serial.print("Init 1\n");
+  for(i=0; i<=13; i++)
+  {
+    pinMode(i, OUTPUT);
+    digitalWrite(i, 0);
+  }
+  
   crs_init(0, 9, 0, true);
+  crs_init(1, 10, 1, true);
+  crs_init(2, 11, 2, true);
+  crs_init(3, 12, 3, true);
   
   Serial.print("Finished initalization");
 }
@@ -34,7 +44,7 @@ ContinuousRotationServo * crs_getInstance(int id)
   return &(contRotServos[id]);
 }
 
-void crs_init(int id, byte controlLine, byte potLine, boolean zero)
+void _loadCalibration_init(int id, byte controlLine, byte potLine, boolean zero)
 {
   ContinuousRotationServo * target = crs_getInstance(id);
 
@@ -48,9 +58,11 @@ void crs_init(int id, byte controlLine, byte potLine, boolean zero)
   target->inTrustedArea = false;
   target->numMatchingVals = 0;
   target->correctionLastVal = analogRead(potLine);
-
+  
+  globalServos[NUM_LIM_ROT_SERVOS + id].attach(target->controlLine);
+  
   if(!zero)
-    crs_loadPosition_(id);
+    crs_loadCalibration_(id);
 
   crs_calibrate_(id);
 }
@@ -121,36 +133,42 @@ int crs_convertVelocityToRaw_(int id, float vel)
   return vel * target->velocitySlope + target->zeroValue;
 }
 
-void crs_loadPosition_(int id)
+void crs_loadCalibration_(int id)
 {
   int i;
   long position;
-  byte * positionPtr;
+  CrsDto dto;
+  byte * dtoPtr;
   ContinuousRotationServo * target;
 
   target = crs_getInstance(id);
+  
+  dtoPtr = (byte *)&dto;
 
-  positionPtr = (byte*)&position;
+  for(i = 0; i<sizeof(CrsDto); i++)
+    dtoPtr[i] = EEPROM.read(id * SIZE_OF_POSITION_VAL + i);
 
-  for(i = 0; i<SIZE_OF_POSITION_VAL; i++)
-    positionPtr[i] = EEPROM.read(id * SIZE_OF_POSITION_VAL + i);
-
-  target->position = position;
+  target->position = dto.position;
+  target->zeroVal = dto.zeroVal;
+  target->velocitySlope = dto.velocitySlope;
 }
 
-void crs_savePosition_(int id)
+void crs_saveCalibration_(int id)
 {
   int i;
   long position;
-  byte * positionPtr;
+  byte * dtoPtr;
   ContinuousRotationServo * target;
+  CrsDto dto;
 
   target = crs_getInstance(id);
-  position = target->position;
-  positionPtr = (byte*)&position;
+  dto.position = target->position;
+  dto.zeroVal = target->zeroVal;
+  dto.velocitySlope = target->velocitySlope;
+  dtoPtr = (byte*)&dto;
 
   for(i = 0; i<SIZE_OF_POSITION_VAL; i++)
-    EEPROM.write(id * SIZE_OF_POSITION_VAL + i, positionPtr[i]);
+    EEPROM.write(id * sizeof(CrsDto) + 1, dtoPtr[i]);
 }
 
 void crs_goToMatchingSection_(int id, int minVal, int maxVal, int reqNumReadings)
@@ -250,6 +268,9 @@ void crs_calibrate_(int id)
   {
     delay(SHORT_CALIBRATION_DUR);
     potVal = analogRead(potLine);
+    Serial.print("Linear seek: ");
+    Serial.print(potVal);
+    Serial.print("\n");
     consistent = (increasing && potVal >= lastVal) || (!increasing && potVal <= lastVal);
     if(MIN_TRUSTED_VALUE <= potVal && potVal <= MAX_TRUSTED_VALUE && consistent)
       numMatchingVals++;
@@ -272,6 +293,9 @@ void crs_calibrate_(int id)
   
   // Observe at first speed
   potVal1 = analogRead(potLine);
+  Serial.print("Newtons (s): ");
+  Serial.print(potVal1);
+  Serial.print("\n");
   delay(100);
   potVal2 = analogRead(potLine);
   deltaPos = potVal2 - potVal1;
@@ -288,6 +312,9 @@ void crs_calibrate_(int id)
     potVal1 = analogRead(potLine);
     delay(100);
     potVal2 = analogRead(potLine);
+    Serial.print("Newtons: ");
+    Serial.print(potVal2);
+    Serial.print("\n");
     deltaPos = potVal2 - potVal1;
     speed2 = currentVel;
     raw2 = deltaPos; // / 300.0; // TODO: constant for slope find delay time (50)
@@ -317,8 +344,14 @@ void crs_calibrate_(int id)
   while(numMatchingVals < REQUIRED_NUM_MATCHING_VALS)
   {
     lastVal = analogRead(potLine);
+    Serial.print("Hill climbing: ");
+    Serial.print(lastVal);
+    Serial.print("\n");
     delay(10);
     potVal = analogRead(potLine);
+    Serial.print("Hill climbing: ");
+    Serial.print(potVal);
+    Serial.print("\n");
     deltaPos = potVal - lastVal;
     
     if(deltaPos == 0)
@@ -337,12 +370,17 @@ void crs_calibrate_(int id)
         currentVel = -40;
         
       numMatchingVals = 0;
+      
       crs_setVelocity_(id, currentVel);
     }
   }
   
   // Update zero value
   target->zeroValue += target->velocitySlope * currentVel;
+  
+  Serial.print("Zero value: ");
+  Serial.print(target->zeroValue);
+  Serial.print("\n");
   
   // Set velocity conversion slope
   target->velocitySlope = avgSlope;
@@ -357,10 +395,9 @@ void crs_setVelocity_(int id, int velocity)
   int convertedVelocity;
   
   ContinuousRotationServo * target = crs_getInstance(id);
-  globalServo.attach(target->controlLine);
   
   convertedVelocity = crs_convertVelocityToRaw_(id, velocity);
-  globalServo.writeMicroseconds(convertedVelocity);
+  globalServos[NUM_LIM_ROT_SERVOS + id].writeMicroseconds(convertedVelocity);
 }
 
 void crs_correctPos_(int id)
@@ -418,6 +455,7 @@ LimitedRotationServo * lrs_getInstance(int id)
 void lrs_init(int id, byte controlLine)
 {
   LimitedRotationServo * target = lrs_getInstance(id);
+  globalServos[id].attach(controlLine);
   target->controlLine = controlLine;
 }
 
@@ -426,8 +464,7 @@ void lrs_setAngle(int id, int angle)
   LimitedRotationServo * target = lrs_getInstance(id);
   int line = target->controlLine;
 
-  globalServo.attach(line);
-  globalServo.write(angle);
+  globalServos[id].write(angle);
 }
 
 void lrs_step(int id)
