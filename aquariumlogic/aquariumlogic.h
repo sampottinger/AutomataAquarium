@@ -71,6 +71,10 @@
 #define SHORT_CALIBRATION_DUR 10
 #define START_CALIBRATION_VEL 10
 
+#define SLOPE_FINDING_VEL_1 100
+#define SLOPE_FINDING_VEL_2 200
+#define SLOPE_FINDING_DUR 300
+
 // Location and speed constraints
 #define MIN_FISH_SPEED 0
 #define MAX_FISH_SPEED 50
@@ -246,6 +250,22 @@ void crs_setVelocity_(int id, int velocity);
  * Para: id, The id of the servo to operate on
 **/
 void crs_correctPos_(int id);
+
+/**
+ * Name: crs_goToLinearSection_(int id)
+ * Desc: Have the servo rotate out to the trusted linear section on its pot
+ * Para: id, The servo to get there
+**/
+void crs_goToTrustedSection_(int id);
+
+/**
+ * Name: crs_exhaustMatchingSection_(int id, int minVal, int maxVal)
+ * Desc: Wait until the servo's pot registers a value outside of the given range
+ * Para: id, The id of the servo to watch
+ *       minVal, The minimum value in the range to exhaust
+ *       maxVal, The maximum value in the range to exhaust
+**/
+void crs_exhaustMatchingSection_(int id, int minVal, int maxVal);
 
 // Logic for simple limited rotation servos
 

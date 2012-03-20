@@ -206,7 +206,7 @@ void crs_saveCalibration_(int id)
   Serial.print("===\n");
 }
 
-void crs_goToMatchingSection_(int id, int minVal, int maxVal, int reqNumReadings)
+/*void crs_goToMatchingSection_(int id, int minVal, int maxVal, int reqNumReadings)
 {
   int numMatchingVals;
   int potVal;
@@ -228,7 +228,7 @@ void crs_goToMatchingSection_(int id, int minVal, int maxVal, int reqNumReadings
       numMatchingVals = 0;
     delay(SHORT_CALIBRATION_DUR);
   }
-}
+}*/
 
 void crs_exhaustMatchingSection_(int id, int minVal, int maxVal)
 {
@@ -246,56 +246,25 @@ void crs_exhaustMatchingSection_(int id, int minVal, int maxVal)
     potVal = analogRead(potLine);
     delay(SHORT_CALIBRATION_DUR);
   }
-  while(MIN_HIGH_VAL <= potVal && potVal <= MAX_HIGH_VAL);
+  while(minVal <= potVal && potVal <= maxVal);
 }
 
-void crs_calibrate_(int id)
+crs_goToTrustedSection_(int id)
 {
-  long lastPos;
-  int deltaPos;
-  int potLine;
-  int potVal;
-  int deltaTotals;
-  int lastVal;
-  int currentVel;
   int numMatchingVals;
-  byte multiplier;
-  boolean consistent;
+  int lastVal;
+  int potLine;
   boolean increasing;
-  boolean inReverse;
-  boolean finished;
-  float raw1;
-  float speed1;
-  float raw2;
-  float speed2;
-  int potVal1;
-  int potVal2;
-  float estimatedSlope;
-  int estimatedZeroVal;
-  float deltaSpeed;
-  float estimatedVelocity;
-  float avgSlope;
-  int numSlopesInAvg;
-  int i;
+  boolean consistent;
   ContinuousRotationServo * target;
 
-  // Get common information loaded
+  // Get background information
   target = crs_getInstance(id);
+  increasing = true;
   potLine = target->potLine;
+  numMatchingVals = 0;
 
-  // Set small starting velocity
-  lastPos = analogRead(potLine);
-  currentVel = START_CALIBRATION_VEL;
-  do
-  {
-    currentVel++;
-    crs_setVelocity_(id, currentVel);
-    delay(SHORT_CALIBRATION_DUR);
-    deltaPos = analogRead(potLine) - lastPos;
-  }
-  while(abs(deltaPos) < 10);
-
-  // Wait for reliable segment
+  // Run to linear section
   numMatchingVals = 0;
   lastVal = analogRead(potLine);
   increasing = true;
@@ -318,6 +287,48 @@ void crs_calibrate_(int id)
     }
     lastVal = potVal;
   }
+}
+
+void crs_calibrate_(int id)
+{
+  long lastPos;
+  int deltaPos;
+  int potLine;
+  int potVal;
+  int lastVal;
+  int currentVel;
+  int numMatchingVals;
+  //boolean consistent;
+  //boolean increasing;
+  boolean finished;
+  float raw1;
+  float speed1;
+  float raw2;
+  float speed2;
+  int potVal1;
+  int potVal2;
+  float estimatedSlope;
+  int estimatedZeroVal;
+  float deltaSpeed;
+  float estimatedVelocity;
+  int i;
+  ContinuousRotationServo * target;
+
+  // Get common information loaded
+  target = crs_getInstance(id);
+  potLine = target->potLine;
+
+  // Set small starting velocity
+  lastPos = analogRead(potLine);
+  currentVel = START_CALIBRATION_VEL;
+  do
+  {
+    currentVel++;
+    crs_setVelocity_(id, currentVel);
+    delay(SHORT_CALIBRATION_DUR);
+    deltaPos = analogRead(potLine) - lastPos;
+  }
+  while(abs(deltaPos) < 10);
   
   // Newton's Method
   //avgSlope = 0;
@@ -417,8 +428,28 @@ void crs_calibrate_(int id)
   Serial.print(target->zeroValue);
   Serial.print("\n");
   
-  // Set velocity conversion slope
-  //target->velocitySlope = avgSlope;
+  // Determine velocity conversion slope
+  crs_setVelocity_(id, SLOPE_FINDING_VEL_1);
+  crs_exhaustMatchingSection_(id, MIN_TRUSTED_VALUE, MAX_TRUSTED_VALUE);
+  crs_goToTrustedSection_(id);
+
+  potVal1 = analogRead(potLine);
+  delay(SLOPE_FINDING_DUR);
+  potVal2 = analogRead(potLine);
+  deltaPos = potVal2 - potVal1;
+  speed1 = SLOPE_FINDING_VEL_1;
+  raw1 = deltaPos / (float)SLOPE_FINDING_DUR;
+
+  crs_setVelocity_(id, SLOPE_FINDING_VEL_2);
+  potVal1 = analogRead(potLine);
+  delay(SLOPE_FINDING_DUR);
+  potVal2 = analogRead(potLine);
+  deltaPos = potVal2 - potVal1;
+  speed2 = SLOPE_FINDING_VEL_2;
+  raw2 = deltaPos / (float)SLOPE_FINDING_DUR;
+
+  estimatedSlope = (raw2 - raw1) / (speed2 - speed1);
+  target->velocitySlope = estimatedSlope;
   
   // Stop
   crs_setVelocity_(id, 0);
