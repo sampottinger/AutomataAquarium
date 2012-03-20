@@ -26,18 +26,22 @@ void setup()
     digitalWrite(i, 0);
   }
   
+  Serial.print("Starting servo init\n");
   //crs_init(0, 9, 0, true);
   crs_init(0, 9, 0, false);
-  crs_setVelocity_(0, 100);
   //crs_init(1, 10, 1, true);
   crs_init(1, 10, 1, false);
-  crs_setVelocity_(1, 100);
   //crs_init(2, 11, 2, true);
   crs_init(2, 11, 2, false);
   //crs_setVelocity_(1, 100);
   //crs_init(3, 12, 3, true);
   crs_init(3, 12, 3, false);
   //crs_setVelocity_(3, 100);
+  
+  crs_setVelocity_(0, 10000);
+  crs_setVelocity_(1, 10000);
+  crs_setVelocity_(2, 10000);
+  crs_setVelocity_(3, 10000);
   
   Serial.print("Finished initalization");
 }
@@ -249,9 +253,10 @@ void crs_exhaustMatchingSection_(int id, int minVal, int maxVal)
   while(minVal <= potVal && potVal <= maxVal);
 }
 
-crs_goToTrustedSection_(int id)
+void crs_goToTrustedSection_(int id)
 {
   int numMatchingVals;
+  int potVal;
   int lastVal;
   int potLine;
   boolean increasing;

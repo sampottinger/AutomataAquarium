@@ -73,7 +73,7 @@
 
 #define SLOPE_FINDING_VEL_1 100
 #define SLOPE_FINDING_VEL_2 200
-#define SLOPE_FINDING_DUR 300
+#define SLOPE_FINDING_DUR 500
 
 // Location and speed constraints
 #define MIN_FISH_SPEED 0
