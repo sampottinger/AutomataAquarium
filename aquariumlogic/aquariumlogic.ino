@@ -627,12 +627,21 @@ void ls_init(int id, byte line)
 {
   LightSensor * target = ls_getInstance(id);
   target->line = line;
+  target->isLight = analogRead(target->line) > MIN_LIGHT_VAL;
 }
 
 boolean ls_isLight(int id)
 {
+  boolean isLight;
+  
   LightSensor * target = ls_getInstance(id);
-  return analogRead(target->line) > MIN_LIGHT_VAL;
+  if(target->isLight)
+    isLight = analogRead(target->line) > MIN_LIGHT_VAL;
+  else
+    isLight = analogRead(target->line) > MIN_LIGHT_RECOVERY_VAL;
+  
+  target->isLight = isLight;
+  return isLight;
 }
 
 LEDAbstraction * led_getInstance(int id)

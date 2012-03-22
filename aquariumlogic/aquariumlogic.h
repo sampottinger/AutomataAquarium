@@ -31,7 +31,8 @@
 #define NUM_AQUARIUMS 1
 
 // Sensor tollerance levels
-#define MIN_LIGHT_VAL 400
+#define MIN_LIGHT_VAL 250
+#define MIN_LIGHT_RECOVERY_VAL 350
 #define PIEZO_MIN_TAP_VAL 50
 #define NO_TAP -1
 
@@ -363,6 +364,7 @@ int piezo_isFired(int id);
 typedef struct
 {
   byte line;
+  boolean isLight;
 } LightSensor;
 
 // Light sensor behavior
