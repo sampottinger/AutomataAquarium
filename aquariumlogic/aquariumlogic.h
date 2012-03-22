@@ -31,7 +31,7 @@
 #define NUM_AQUARIUMS 1
 
 // Sensor tollerance levels
-#define MIN_LIGHT_VAL 200
+#define MIN_LIGHT_VAL 400
 #define PIEZO_MIN_TAP_VAL 50
 #define NO_TAP -1
 
@@ -62,6 +62,7 @@
 #define CALIBRATION_CAUTIOUS_FACTOR 0.75
 
 #define REQUIRED_NUM_MATCHING_VALS 15
+#define REQUIRED_NUM_MATCHING_VALS_MED 10
 #define REQUIRED_NUM_MATCHING_VALS_LOOSE 4
 #define MIN_HIGH_VAL 1000 // depricated
 #define MAX_HIGH_VAL 1024 // deprectaed
@@ -87,6 +88,9 @@
 #define MAX_Z_VAL 102400
 #define CENTRAL_X_VAL 0
 #define CENTRAL_Y_VAL 0
+#define FISH_HIDE_X 0
+#define FISH_HIDE_Y 0
+#define FISH_HIDE_Z 0
 
 // Piezo sensor ids
 #define NE_SENSOR_ID 0
@@ -159,6 +163,8 @@ ContinuousRotationServo * crs_getInstance(int id);
  *       calibrate, If true, servo's position is reset. If false, loaded from EEPROM
 **/
 void crs_init(int id, byte controlLine, byte potLine, boolean callibrate);
+
+void crs_stop(int id);
 
 /**
  * Name: crs_setOwner(int id, int type, int ownerID);
@@ -540,6 +546,8 @@ void fish_goTo(long id, long x, long y, long z);
 **/
 void fish_onGoalReached(int id);
 
+void fish_stop(int id);
+
 /**
  * Name: fish_onServoGoalReached(int id, int servoID)
  * Desc: Event handler for when a servo for a fish reaches its goal
@@ -747,7 +755,7 @@ int aquarium_getOpposingDirection_(int id, int dir);
  *       direction, The direction in which the extreme x value is requested
  * Retr: Extreme x position in direction
 **/
-int aquarium_getXBoundInDirection_(int id, int direction);
+long aquarium_getXBoundInDirection_(int id, int direction);
 
 /**
  * Name: aquarium_getYBoundInDirection_(int id, int direction)
@@ -756,4 +764,4 @@ int aquarium_getXBoundInDirection_(int id, int direction);
  *       direction, The direction in which the extreme y value is requested
  * Retr: Extreme y position in direction
 **/
-int aquarium_getYBoundInDirection_(int id, int direction);
+long aquarium_getYBoundInDirection_(int id, int direction);
