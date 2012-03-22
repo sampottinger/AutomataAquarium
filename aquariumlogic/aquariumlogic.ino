@@ -14,7 +14,7 @@ Fish fish[NUM_FISH];
 PiezoSensorGroup piezoSensorGroups[NUM_PIEZO_SENSOR_GROUPS];
 Aquarium aquariums[NUM_AQUARIUMS];
 
-boolean out;
+int globalStep;
 
 void setup()
 {
@@ -38,7 +38,7 @@ void setup()
   //crs_init(2, 6, 6, true);
   crs_init(2, 6, 6, false);
   //crs_init(3, 7, 7, true);
-  //crs_init(3, 7, 7, false);
+  //`crs_init(3, 7, 7, false);
 
   Serial.print("Finished initalization\n");
   //crs_setVelocity_(3, 100);
@@ -58,7 +58,7 @@ void setup()
   jellyfish_init(0, 0, 0);
 
   fish_setVelocity(0, 5000);
-  fish_goTo(0, 5000000, 5000000, 5000000);
+  fish_goTo(0, 50000000, 5000000, 5000000);
 
   aquarium_init(0, 0, 0, 0, 0);
 }
@@ -84,6 +84,7 @@ ContinuousRotationServo * crs_getInstance(int id)
 void crs_stop(int id)
 {
   crs_setVelocity_(id, 0);
+  crs_setTargetVelocity(id, 0);
 }
 
 void crs_init(int id, byte controlLine, byte potLine, boolean calibrate)
@@ -1010,7 +1011,7 @@ int piezoSensorGroupNum)
 {
   Aquarium * target = aquarium_getInstance(id);
 
-  out=false;
+  globalStep = 0;
 
   // Save simple attributes
   target->fishNum = fishNum;
@@ -1137,21 +1138,22 @@ void aquarium_tick(int id, long newMS)
 void aquarium_onFishReachedGoal(int id, int fishID)
 {
   Aquarium * target;
-  ContinuousRotationServo * s0 = crs_getInstance(0);
-  ContinuousRotationServo * s1 = crs_getInstance(1);
-  ContinuousRotationServo * s2 = crs_getInstance(2);
   target = aquarium_getInstance(id);
   if(target->isLight)
   {
-    if(!out)
+    globalStep++;
+    globalStep %= 3;
+    switch(globalStep)
     {
-      out = true;
-      fish_goTo(0, 0, 0, 0);
-    }
-    else
-    {
-      out = false;
-      fish_goTo(0, 5000000, 5000000, 5000000);
+      case 0:
+        fish_goTo(target->fishNum, 0, 0, 0);
+        break;
+      case 1:
+        fish_goTo(target->fishNum, 50000000, 5000000, 5000000);
+        break;
+      case 2:
+        fish_goTo(target->fishNum, 100000000, 0, 0);
+        break;
     }
   }
 }
