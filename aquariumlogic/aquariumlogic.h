@@ -31,7 +31,7 @@
 #define NUM_AQUARIUMS 1
 
 // Sensor tollerance levels
-#define MIN_LIGHT_VAL 100
+#define MIN_LIGHT_VAL 200
 #define PIEZO_MIN_TAP_VAL 50
 #define NO_TAP -1
 
@@ -39,14 +39,15 @@
 #define NONE -1
 
 // Jellyfish behavorial constants
-#define JELLYFISH_RAISED_ANGLE 0
-#define JELLYFISH_LOWERED_ANGLE 180
+#define JELLYFISH_RAISED_ANGLE 180
+#define JELLYFISH_LOWERED_ANGLE 0
 
 // Fish behavorial constants
 // NOTE: Location and speed constraints below
-#define FISH_SUB_STEPS_TO_GOAL 10
+#define FISH_SUB_STEPS_TO_GOAL 1
 #define WIGGLE_AMPLITUDE 10
 #define WIGGLE_SPEED 3.14159 // rad / sec
+#define FISH_OWNER 1
 
 // Aquarium behavior constants
 #define LONG_TIME_STEP 100
@@ -133,6 +134,9 @@ typedef struct
   int correctionLastVal;
   int targetVel;
   double velocitySlope; // From calibration
+  int ownerType;
+  int ownerID;
+  int selfID;
 } ContinuousRotationServo;
 
 // Continuous rotation servo behavior
@@ -153,6 +157,15 @@ ContinuousRotationServo * crs_getInstance(int id);
  *       calibrate, If true, servo's position is reset. If false, loaded from EEPROM
 **/
 void crs_init(int id, byte controlLine, byte potLine, boolean callibrate);
+
+/**
+ * Name: crs_setOwner(int id, int type, int ownerID);
+ * Desc: Sets the id of the owner of this servo
+ * Para: id, The id of the servo to set the owner of
+ *       type, The type of the object that owns this servo
+ *       ownerID, The unique numerical id of the object that owns this servo
+**/
+void crs_setOwner(int id, int type, int ownerID);
 
 /**
  * Name: crs_startMovingTo(int id, long targetPosition)
@@ -484,6 +497,7 @@ typedef struct
   float zSpeedPortion;
   int subStepsLeftToGoal;
   double moveAngle;
+  int numWaitingServos;
 } Fish;
 
 /**
@@ -523,6 +537,14 @@ void fish_goTo(long id, long x, long y, long z);
  * Para: id, The id of the fish that reached its goal position
 **/
 void fish_onGoalReached(int id);
+
+/**
+ * Name: fish_onServoGoalReached(int id, int servoID)
+ * Desc: Event handler for when a servo for a fish reaches its goal
+ * Para: id, The id of the fish whose servo has reached a goal
+ *       servoID, The id of the servo that reached its goal
+**/
+void fish_onServoGoalReached(int id, int servoID);
 
 /**
  * Name: fish_goToNextInternalGoal_(int id)

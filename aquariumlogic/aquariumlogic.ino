@@ -17,6 +17,7 @@ Aquarium aquariums[NUM_AQUARIUMS];
 void setup()
 {
   int i;
+  ContinuousRotationServo * crs;
   
   Serial.begin(9600);
   
@@ -26,29 +27,49 @@ void setup()
     digitalWrite(i, 0);
   }
   
-  Serial.print("Starting servo init\n");
-  //crs_init(0, 9, 0, true);
-  crs_init(0, 9, 0, false);
-  //crs_init(1, 10, 1, true);
-  crs_init(1, 10, 1, false);
-  //crs_init(2, 11, 2, true);
-  crs_init(2, 11, 2, false);
-  //crs_setVelocity_(1, 100);
-  //crs_init(3, 12, 3, true);
-  crs_init(3, 12, 3, false);
+  //crs_init(0, 4, 4, true);
+  crs_init(0, 4, 4, false);
+  Serial.print("Calibrated 0\n");
+  //crs_init(1, 5, 5, true);
+  crs_init(1, 5, 5, false);
+  Serial.print("Calibrated 1\n");
+  //crs_init(2, 6, 6, true);
+  crs_init(2, 6, 6, false);
+  Serial.print("Calibrated 2\n");
+  //crs_init(3, 7, 7, true);
+  //crs_init(3, 7, 7, false);
+  Serial.print("Calibrated 3\n");
+  
+  Serial.print("Finished initalization\n");
   //crs_setVelocity_(3, 100);
   
-  crs_setVelocity_(0, 10000);
-  crs_setVelocity_(1, 10000);
-  crs_setVelocity_(2, 10000);
-  crs_setVelocity_(3, 10000);
+  crs_setTargetVelocity(0, 5000);
+  crs_setTargetVelocity(1, 5000);
+  crs_setTargetVelocity(2, 5000);
+  //crs_setTargetVelocity(3, 1000);
   
-  Serial.print("Finished initalization");
+  //crs_startMovingTo(1, 10000000);
+  //crs_startMovingTo(2, 10000000);
+  //crs_startMovingTo(3, 5000000);
+  
+  ls_init(0, 12);
+  lrs_init(0, 9);
+  led_init(0, 12);
+  jellyfish_init(0, 0, 0);
 }
 
 void loop()
 {
-  delay(100);
+  delay(500);
+  if(ls_isLight(0))
+    jellyfish_raise(0);
+  else
+    jellyfish_lower(0);
+  /*delay(100);
+  crs_step(0, 100);*/
+  //crs_step(1, 100);
+  //crs_step(2, 100);
+  //crs_step(3, 100);
 }
 
 ContinuousRotationServo * crs_getInstance(int id)
@@ -70,6 +91,9 @@ void crs_init(int id, byte controlLine, byte potLine, boolean calibrate)
   target->inTrustedArea = false;
   target->numMatchingVals = 0;
   target->correctionLastVal = analogRead(potLine);
+  target->ownerID = NONE;
+  target->ownerType = NONE;
+  target->selfID = id;
   
   globalServos[NUM_LIM_ROT_SERVOS + id].attach(target->controlLine);
   
@@ -86,6 +110,13 @@ void crs_init(int id, byte controlLine, byte potLine, boolean calibrate)
   crs_setVelocity_(id, 0);
 }
 
+void crs_setOwner(int id, int type, int ownerID)
+{
+  ContinuousRotationServo * target = crs_getInstance(id);
+  target->ownerID = ownerID;
+  target->ownerType = type;
+}
+
 void crs_startMovingTo(int id, long targetPosition)
 {
   ContinuousRotationServo * target = crs_getInstance(id);
@@ -93,12 +124,18 @@ void crs_startMovingTo(int id, long targetPosition)
   if(targetPosition > target->position)
   {
     target->decreasing = false;
-    crs_setVelocity_(id, -target->targetVel);
+    crs_setVelocity_(id, target->targetVel);
+    Serial.print("Setting velocity to ");
+    Serial.print(target->targetVel);
+    Serial.print("\n");
   }
   else
   {
     target->decreasing = true;
-    crs_setVelocity_(id, target->targetVel);
+    crs_setVelocity_(id, -target->targetVel);
+    Serial.print("Setting velocity to ");
+    Serial.print(-target->targetVel);
+    Serial.print("\n");
   }
 }
 
@@ -110,22 +147,32 @@ void crs_startMovingToAngle(int id, double angle)
 void crs_step(int id, long ms)
 {
   long delta;
+  boolean decreasing;
   ContinuousRotationServo * target;
   
   target = crs_getInstance(id);
+  decreasing = target->decreasing;
   
   // Update expected position
-  target->position += ms * target->targetVel;
-  
+  if(decreasing)
+    target->position -= ms * target->targetVel;
+  else
+    target->position += ms * target->targetVel;
+    
   // Attempt to correct with pot
   if(target->targetVel != 0)
     crs_correctPos_(id);
   
   // Check on delta
   delta = target->targetPosition - target->position;
-  if(target->targetVel < 0 && delta >= 0)
+  Serial.print("Delta: ");
+  Serial.print(delta);
+  Serial.print(" and velocity: ");
+  Serial.print(target->targetVel);
+  Serial.print("\n");
+  if(decreasing && delta >= 0)
     crs_onGoalReached(id);
-  else if(target->targetVel > 0 && delta <= 0)
+  else if(!decreasing && delta <= 0)
     crs_onGoalReached(id);
 }
 
@@ -137,7 +184,20 @@ void crs_setTargetVelocity(int id, int targetVelocity)
 
 void crs_onGoalReached(int id)
 {
+  ContinuousRotationServo * target;
+  target = crs_getInstance(id);
+  
+  Serial.print("Reached goal! Stop?");
+  Serial.print("\n");
   crs_setVelocity_(id, 0);
+  
+  // Inform owner
+  switch(target->ownerType)
+  {
+    case FISH_OWNER:
+      fish_onServoGoalReached(target->ownerID, target->selfID);
+      break;
+  }
 }
 
 long crs_getPos(int id)
@@ -168,16 +228,9 @@ void crs_loadCalibration_(int id)
   {
     dtoPtr[i] = EEPROM.read(id * sizeof(CrsDto) + i);
   }
-  Serial.print(dto.position);
-  Serial.print("\n");
   target->position = dto.position;
-  Serial.print(dto.zeroValue);
-  Serial.print("\n");
   target->zeroValue = dto.zeroValue;
-  Serial.print(dto.velocitySlope);
-  Serial.print("\n");
   target->velocitySlope = dto.velocitySlope;
-  Serial.print("===\n");
 }
 
 void crs_saveCalibration_(int id)
@@ -190,24 +243,14 @@ void crs_saveCalibration_(int id)
 
   target = crs_getInstance(id);
   dto.position = target->position;
-  Serial.print(dto.position);
-  Serial.print("\n");
   dto.zeroValue = target->zeroValue;
-  Serial.print(dto.zeroValue);
-  Serial.print("\n");
   dto.velocitySlope = target->velocitySlope;
-  Serial.print(dto.velocitySlope);
-  Serial.print("\n");
   dtoPtr = (byte*)&dto;
-  Serial.print("===\n");
 
   for(i = 0; i<sizeof(CrsDto); i++)
   {
-    Serial.print(dtoPtr[i]);
-    Serial.print("\n");
     EEPROM.write(id * sizeof(CrsDto) + i, dtoPtr[i]);
   }
-  Serial.print("===\n");
 }
 
 /*void crs_goToMatchingSection_(int id, int minVal, int maxVal, int reqNumReadings)
@@ -277,9 +320,6 @@ void crs_goToTrustedSection_(int id)
   {
     delay(SHORT_CALIBRATION_DUR);
     potVal = analogRead(potLine);
-    Serial.print("Linear seek: ");
-    Serial.print(potVal);
-    Serial.print("\n");
     consistent = (increasing && potVal >= lastVal) || (!increasing && potVal <= lastVal);
     if(MIN_TRUSTED_VALUE <= potVal && potVal <= MAX_TRUSTED_VALUE && consistent)
       numMatchingVals++;
@@ -335,6 +375,10 @@ void crs_calibrate_(int id)
   }
   while(abs(deltaPos) < 10);
   
+  crs_goToTrustedSection_(id);
+  
+  Serial.print("HERE!\n");
+  
   // Newton's Method
   //avgSlope = 0;
   //numSlopesInAvg = 0;
@@ -344,9 +388,6 @@ void crs_calibrate_(int id)
   
   // Observe at first speed
   potVal1 = analogRead(potLine);
-  Serial.print("Newtons (s): ");
-  Serial.print(potVal1);
-  Serial.print("\n");
   delay(100);
   potVal2 = analogRead(potLine);
   deltaPos = potVal2 - potVal1;
@@ -363,9 +404,6 @@ void crs_calibrate_(int id)
     potVal1 = analogRead(potLine);
     delay(100);
     potVal2 = analogRead(potLine);
-    Serial.print("Newtons: ");
-    Serial.print(potVal2);
-    Serial.print("\n");
     deltaPos = potVal2 - potVal1;
     speed2 = currentVel;
     raw2 = deltaPos; // / 300.0; // TODO: constant for slope find delay time (50)
@@ -387,6 +425,8 @@ void crs_calibrate_(int id)
       currentVel = estimatedZeroVal;
     }
   }
+  
+  Serial.print("Newtons done?\n");
 
   // Finish with hill climbing
   // Change speed until delta position = 0
@@ -395,15 +435,11 @@ void crs_calibrate_(int id)
   while(numMatchingVals < REQUIRED_NUM_MATCHING_VALS)
   {
     lastVal = analogRead(potLine);
-    Serial.print("Hill climbing: ");
-    Serial.print(lastVal);
-    Serial.print("\n");
     delay(10);
     potVal = analogRead(potLine);
-    Serial.print("Hill climbing: ");
-    Serial.print(potVal);
-    Serial.print("\n");
     deltaPos = potVal - lastVal;
+    Serial.print(deltaPos);
+    Serial.print("\n");
     
     if(deltaPos == 0)
     {
@@ -429,10 +465,6 @@ void crs_calibrate_(int id)
   // Update zero value
   target->zeroValue += target->velocitySlope * currentVel;
   
-  Serial.print("Zero value: ");
-  Serial.print(target->zeroValue);
-  Serial.print("\n");
-  
   // Determine velocity conversion slope
   crs_setVelocity_(id, SLOPE_FINDING_VEL_1);
   crs_exhaustMatchingSection_(id, MIN_TRUSTED_VALUE, MAX_TRUSTED_VALUE);
@@ -452,7 +484,7 @@ void crs_calibrate_(int id)
   deltaPos = potVal2 - potVal1;
   speed2 = SLOPE_FINDING_VEL_2;
   raw2 = deltaPos / (float)SLOPE_FINDING_DUR;
-
+  
   estimatedSlope = (raw2 - raw1) / (speed2 - speed1);
   target->velocitySlope = estimatedSlope;
   
@@ -668,6 +700,7 @@ void fish_init(int id, int xServoNum, int yServoNum, int zServoNum, int thetaSer
   targetFish->yServo = yServoNum;
   targetFish->zServo = zServoNum;
   targetFish->thetaServo = thetaServo;
+  target->numWaitingServos = 0;
 
   // Start going home
   fish_goTo(id, 0, 0, 0);
@@ -744,7 +777,21 @@ void fish_goTo(long id, long targetX, long targetY, long targetZ)
   target->moveAngle = targetTheta;
 
   // Start off to first positional subgoal
-  fish_goToNextInternalGoal_(id);
+  //fish_goToNextInternalGoal_(id); // TODO: Cos wiggle
+  crs_startMovingTo(target->xServo, targetX);
+  crs_startMovingTo(target->yServo, targetY);
+  crs_startMovingTo(target->zServo, targetZ);
+  
+  // We are waiting on a few servos
+  target->numWaitingServos = 4;
+}
+
+void fish_onServoGoalReached(int id, int servoID)
+{
+  Fish * target = fish_getInstance(id);
+  target->numWaitingServos--;
+  if(target->numWaitingServos == 0)
+    fish_onGoalReached(id);
 }
 
 void fish_onGoalReached(int id)
@@ -811,7 +858,15 @@ void fish_step(int id, long ms)
     crs_step(target->xServo, ms);
     crs_step(target->yServo, ms);
     crs_step(target->zServo, ms);
-    crs_step(target->thetaServo, ms);
+    //crs_step(target->thetaServo, ms);
+}
+
+void fish_setVelocity(int id, float velocity)
+{
+  Fish * target = fish_getInstance(id);
+  crs_setTargetVelocity(target->xServo, velocity);
+  crs_setTargetVelocity(target->yServo, velocity);
+  crs_setTargetVelocity(target->zServo, velocity);
 }
 
 PiezoSensorGroup * psg_getInstance(int id)
