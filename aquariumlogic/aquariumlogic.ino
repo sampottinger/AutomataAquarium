@@ -603,19 +603,28 @@ void piezo_init(int id, byte line)
 {
   PiezoSensor * target = piezo_getInstance(id);
   target->line = line;
+  target->fired = NO_TAP;
 }
 
 int piezo_isFired(int id)
+{
+  PiezoSensor * target = piezo_getInstance(id);
+  
+  int ret_val = target->fired;
+  target->fired = NO_TAP;
+  return ret_val;
+}
+
+void piezo_onTick(int id)
 {
   PiezoSensor * target = piezo_getInstance(id);
   int line = target->line;
 
   int val = analogRead(line);
 
-  if(val < PIEZO_MIN_TAP_VAL)
-    return NO_TAP;
-  else
-    return val;
+  //keep track of max fired val in target->fired
+  if(val >= PIEZO_MIN_TAP_VAL && val > target->fired)
+    target->fired = val;
 }
 
 LightSensor * ls_getInstance(int id)
@@ -977,6 +986,20 @@ int psg_getTapped(int id)
     return target->sensorNums[maxSensorRecordIndex].highLevelID;
 }
 
+void psg_onTick(int id)
+{
+  int i;
+  int sensorID;
+  
+  PiezoSensorGroup * target = psg_getInstance(id);
+  
+  for(i = 0; i < target->nextElementIndex; i++)
+  {
+    sensorID = target->sensorNums[i].sensorID;
+    piezo_onTick(sensorID);
+  }
+}
+
 Aquarium * aquarium_getInstance(int id)
 {
   return &(aquariums[id]);
@@ -1106,6 +1129,9 @@ void aquarium_tick(int id, long newMS)
   target->shortMSRemain = newShortMSRemain;
 
   target->lastMS = newMS;
+  
+  //perform events for every tick
+  psg_onTick(target->piezoSensorGroupNum);
 }
 
 void aquarium_onFishReachedGoal(int id, int fishID)

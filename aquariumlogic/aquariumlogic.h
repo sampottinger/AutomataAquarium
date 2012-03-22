@@ -331,6 +331,7 @@ void lrs_step(int id, long ms);
 typedef struct
 {
   byte line;
+  int fired;
 } PiezoSensor;
 
 // Piezo sensor behavior
@@ -359,6 +360,14 @@ void piezo_init(int id, byte line);
  *       positive reading otherwise
 **/
 int piezo_isFired(int id);
+
+
+/**
+ * Name: piezo_onTick(int id)
+ * Desc: rapidly checks the piezo for a tap
+ * Para: id, The unique id of the piezeo sensor to check
+**/
+void piezo_onTick(int id);
 
 // Light sensor abstraction
 typedef struct
@@ -637,6 +646,13 @@ void psg_addToSensorList(int id, int sensorID, int sensorHighLevelID);
  * Retr: NONE or high level id of sensor that indicated a tap
 **/
 int psg_getTapped(int id);
+
+/**
+ * Name: psg_getTapped(int id)
+ * Desc: rapidly checks all sensors for a tap event
+ * Para: id, The unique numerical id of the group to operate on
+**/
+void psg_onTick(int id);
 
 // Aquarium abstraction
 
