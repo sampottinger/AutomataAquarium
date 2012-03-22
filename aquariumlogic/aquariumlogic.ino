@@ -14,6 +14,8 @@ Fish fish[NUM_FISH];
 PiezoSensorGroup piezoSensorGroups[NUM_PIEZO_SENSOR_GROUPS];
 Aquarium aquariums[NUM_AQUARIUMS];
 
+boolean out;
+
 void setup()
 {
   int i;
@@ -29,44 +31,43 @@ void setup()
   
   //crs_init(0, 4, 4, true);
   crs_init(0, 4, 4, false);
-  Serial.print("Calibrated 0\n");
   //crs_init(1, 5, 5, true);
   crs_init(1, 5, 5, false);
-  Serial.print("Calibrated 1\n");
   //crs_init(2, 6, 6, true);
   crs_init(2, 6, 6, false);
-  Serial.print("Calibrated 2\n");
   //crs_init(3, 7, 7, true);
   //crs_init(3, 7, 7, false);
-  Serial.print("Calibrated 3\n");
   
   Serial.print("Finished initalization\n");
   //crs_setVelocity_(3, 100);
   
-  crs_setTargetVelocity(0, 5000);
-  crs_setTargetVelocity(1, 5000);
-  crs_setTargetVelocity(2, 5000);
+  //crs_setTargetVelocity(0, 5000);
+  //crs_setTargetVelocity(1, 5000);
+  //crs_setTargetVelocity(2, 5000);
   //crs_setTargetVelocity(3, 1000);
+  fish_init(0, 0, 1, 2, 3);
   
-  //crs_startMovingTo(1, 10000000);
-  //crs_startMovingTo(2, 10000000);
-  //crs_startMovingTo(3, 5000000);
+  //crs_startMovingTo(0, 5000000);
+  //crs_startMovingTo(1, 5000000);
+  //crs_startMovingTo(2, 5000000);
   
-  ls_init(0, 12);
+  /*ls_init(0, 12);
   lrs_init(0, 9);
   led_init(0, 12);
-  jellyfish_init(0, 0, 0);
+  jellyfish_init(0, 0, 0);*/
+  
+  fish_setVelocity(0, 5000);
+  fish_goTo(0, 5000000, 5000000, 5000000);
+  
+  aquarium_init(0, 0, 0, 0, 0);
 }
 
 void loop()
 {
-  delay(500);
-  if(ls_isLight(0))
-    jellyfish_raise(0);
-  else
-    jellyfish_lower(0);
-  /*delay(100);
-  crs_step(0, 100);*/
+  delay(100);
+  aquarium_tick(0, 100);
+  
+  //crs_step(0, 100);
   //crs_step(1, 100);
   //crs_step(2, 100);
   //crs_step(3, 100);
@@ -125,17 +126,21 @@ void crs_startMovingTo(int id, long targetPosition)
   {
     target->decreasing = false;
     crs_setVelocity_(id, target->targetVel);
-    Serial.print("Setting velocity to ");
+    /*Serial.print("Setting velocity to ");
     Serial.print(target->targetVel);
-    Serial.print("\n");
+    Serial.print(" on ");
+    Serial.print(id);
+    Serial.print("\n");*/
   }
   else
   {
     target->decreasing = true;
     crs_setVelocity_(id, -target->targetVel);
-    Serial.print("Setting velocity to ");
+    /*Serial.print("Setting velocity to ");
     Serial.print(-target->targetVel);
-    Serial.print("\n");
+    Serial.print(" on ");
+    Serial.print(id);
+    Serial.print("\n");*/
   }
 }
 
@@ -165,11 +170,11 @@ void crs_step(int id, long ms)
   
   // Check on delta
   delta = target->targetPosition - target->position;
-  Serial.print("Delta: ");
+  /*Serial.print("Delta: ");
   Serial.print(delta);
   Serial.print(" and velocity: ");
   Serial.print(target->targetVel);
-  Serial.print("\n");
+  Serial.print("\n");*/
   if(decreasing && delta >= 0)
     crs_onGoalReached(id);
   else if(!decreasing && delta <= 0)
@@ -187,8 +192,8 @@ void crs_onGoalReached(int id)
   ContinuousRotationServo * target;
   target = crs_getInstance(id);
   
-  Serial.print("Reached goal! Stop?");
-  Serial.print("\n");
+  /*Serial.print("Reached goal! Stop?");
+  Serial.print("\n");*/
   crs_setVelocity_(id, 0);
   
   // Inform owner
@@ -377,8 +382,6 @@ void crs_calibrate_(int id)
   
   crs_goToTrustedSection_(id);
   
-  Serial.print("HERE!\n");
-  
   // Newton's Method
   //avgSlope = 0;
   //numSlopesInAvg = 0;
@@ -508,13 +511,15 @@ void crs_correctPos_(int id)
   ContinuousRotationServo * target = crs_getInstance(id);
   int currentVal = analogRead(target->potLine);
   int lastVal = target->correctionLastVal;
-  boolean increasing = target->targetVel > 0;
+  boolean increasing = !target->decreasing;
   int numMatchingVals = target->numMatchingVals;
   boolean consistent;
   int numStepsIntoRot;
   int deltaSteps;
   
   // If in trusted zone, make sure we are still there and correct pos
+  Serial.print(target->inTrustedArea);
+  Serial.print("\n");
   if(target->inTrustedArea)
   {
     // Make sure we are still in trusted range
@@ -535,7 +540,10 @@ void crs_correctPos_(int id)
     // See if we have a matching value
     consistent = (increasing && currentVal >= lastVal) || (!increasing && currentVal <= lastVal);
     if(MIN_TRUSTED_VALUE <= currentVal && currentVal <= MAX_TRUSTED_VALUE && consistent)
+    {
+      Serial.print("Hello?\n");
       numMatchingVals++;
+    }
     else
     {
       numMatchingVals -= abs(currentVal - lastVal)/2;
@@ -570,7 +578,7 @@ void lrs_setAngle(int id, int angle)
   globalServos[id].write(angle);
 }
 
-void lrs_step(int id)
+void lrs_step(int id, long ms)
 {
   
 }
@@ -664,6 +672,7 @@ void jellyfish_init(int id, int servoNum, int ledNum)
   Jellyfish * jellyfish = jellyfish_getInstance(id);
   jellyfish->servoNum = servoNum;
   jellyfish->ledNum = ledNum;
+  jellyfish_raise(id);
 }
 
 void jellyfish_lower(int id)
@@ -697,10 +706,13 @@ void fish_init(int id, int xServoNum, int yServoNum, int zServoNum, int thetaSer
 
   // Save servo nums
   targetFish->xServo = xServoNum;
+  crs_setOwner(xServoNum, FISH_OWNER, id);
   targetFish->yServo = yServoNum;
+  crs_setOwner(yServoNum, FISH_OWNER, id);
   targetFish->zServo = zServoNum;
+  crs_setOwner(zServoNum, FISH_OWNER, id);
   targetFish->thetaServo = thetaServo;
-  target->numWaitingServos = 0;
+  targetFish->numWaitingServos = 0;
 
   // Start going home
   fish_goTo(id, 0, 0, 0);
@@ -721,7 +733,7 @@ void fish_goTo(long id, long targetX, long targetY, long targetZ)
   Fish * target = fish_getInstance(id);
 
   // Update target position
-  target->targetX = targetX;
+  /*target->targetX = targetX;
   target->targetY = targetY;
   target->targetZ = targetZ;
 
@@ -774,12 +786,15 @@ void fish_goTo(long id, long targetX, long targetY, long targetZ)
   target->startMS = millis();
 
   // Save angle
-  target->moveAngle = targetTheta;
+  target->moveAngle = targetTheta;*/
 
   // Start off to first positional subgoal
   //fish_goToNextInternalGoal_(id); // TODO: Cos wiggle
+  crs_setTargetVelocity(target->xServo, target->velocity);
   crs_startMovingTo(target->xServo, targetX);
+  crs_setTargetVelocity(target->yServo, target->velocity);
   crs_startMovingTo(target->yServo, targetY);
+  crs_setTargetVelocity(target->zServo, target->velocity);
   crs_startMovingTo(target->zServo, targetZ);
   
   // We are waiting on a few servos
@@ -797,12 +812,15 @@ void fish_onServoGoalReached(int id, int servoID)
 void fish_onGoalReached(int id)
 {
   Fish * target = fish_getInstance(id);
+  
+  Serial.print("Here :(\n");
 
   // Determine if subgoal or actual goal
-  if(target->subStepsLeftToGoal == 0)
-    aquarium_onFishReachedGoal(id); // Tell system
-  else 
-    fish_goToNextInternalGoal_(id); // Next subgoal
+  target->subStepsLeftToGoal--;
+  //if(target->subStepsLeftToGoal <= 0)
+  aquarium_onFishReachedGoal(AQUARIUM_ID, id); // Tell system
+  /*else 
+    fish_goToNextInternalGoal_(id); // Next subgoal*/
 }
 
 void fish_goToNextInternalGoal_(int id)
@@ -864,9 +882,10 @@ void fish_step(int id, long ms)
 void fish_setVelocity(int id, float velocity)
 {
   Fish * target = fish_getInstance(id);
-  crs_setTargetVelocity(target->xServo, velocity);
+  target->velocity = velocity;
+  /*crs_setTargetVelocity(target->xServo, velocity);
   crs_setTargetVelocity(target->yServo, velocity);
-  crs_setTargetVelocity(target->zServo, velocity);
+  crs_setTargetVelocity(target->zServo, velocity);*/
 }
 
 PiezoSensorGroup * psg_getInstance(int id)
@@ -937,6 +956,8 @@ void aquarium_init(int id, int fishNum, int jellyfishNum, int lightSensorNum,
                    int piezoSensorGroupNum)
 {
   Aquarium * target = aquarium_getInstance(id);
+  
+  out=false;
     
   // Save simple attributes
   target->fishNum = fishNum;
@@ -1022,5 +1043,19 @@ void aquarium_tick(int id, long newMS)
 
 void aquarium_onFishReachedGoal(int id, int fishID)
 {
-  
+  Aquarium * target;
+  ContinuousRotationServo * s0 = crs_getInstance(0);
+  ContinuousRotationServo * s1 = crs_getInstance(1);
+  ContinuousRotationServo * s2 = crs_getInstance(2);
+  target = aquarium_getInstance(id);
+  if(!out)
+  {
+    out = true;
+    fish_goTo(0, 0, 0, 0);
+  }
+  else
+  {
+    out = false;
+    fish_goTo(0, 5000000, 5000000, 5000000);
+  }
 }

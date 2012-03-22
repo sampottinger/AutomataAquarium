@@ -106,6 +106,8 @@
 #define NUM_STEPS_PER_RAD 0.00306796158
 #define NUM_STEPS_ROT 2048
 
+#define AQUARIUM_ID 0
+
 #define RAND_AIN_PORT 0
 
 #include <Arduino.h>
@@ -695,7 +697,7 @@ void aquarium_tick(int id, long ms);
  * Desc: Event handler for when a fish reaches its goal position
  * Para: fishID, The id of the fish that reached its goal
 **/
-void aquarium_onFishReachedGoal(int fishID);
+void aquarium_onFishReachedGoal(int id, int fishID);
 
 /**
  * Name: aquarium_onFishReachedGoal_(int id, int fishID)
