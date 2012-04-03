@@ -48,6 +48,17 @@ void setup()
   //crs_setTargetVelocity(2, 5000);
   //crs_setTargetVelocity(3, 1000);
   fish_init(0, 0, 1, 2, 3);
+  
+  piezo_init(0, 0);
+  piezo_init(1, 1);
+  piezo_init(2, 13);
+  piezo_init(3, 11);
+  
+  psg_init(0, 4);
+  psg_addToSensorList(0, 0, SOUTHWEST);
+  psg_addToSensorList(0, 1, NORTHWEST);
+  psg_addToSensorList(0, 2, NORTHEAST);
+  psg_addToSensorList(0, 3, SOUTHEAST);
 
   //crs_startMovingTo(0, 5000000);
   //crs_startMovingTo(1, 5000000);
@@ -624,8 +635,8 @@ void piezo_onTick(int id)
   int val = analogRead(line);
 
   //keep track of max fired val in target->fired
-  if(val >= PIEZO_MIN_TAP_VAL && val > target->fired)
-    target->fired = val;
+  //if(val >= PIEZO_MIN_TAP_VAL && val > target->fired)
+  //  target->fired = val;
 }
 
 LightSensor * ls_getInstance(int id)
@@ -1045,8 +1056,8 @@ void aquarium_shortStep(int id, long ms)
   Serial.print("\n");
 
   // Respond to tap
-  //if(tappedSensor != NONE)
-  //    aquarium_runFishToOpposingSide_(id, tappedSensor);
+  if(tappedSensor != NONE)
+      aquarium_runFishToOpposingSide_(id, tappedSensor);
 
   // Repond to light
   if(curLight != target->isLight) // If the light sensor state has changed
@@ -1095,7 +1106,7 @@ void aquarium_transitionToJellyfishState_(int id)
 {
   Serial.print("Jellyfish?\n");
   Aquarium * target = aquarium_getInstance(id);
-  fish_stop(target->fishNum);
+  fish_goTo(0, 0, 0, 1000000000);
   jellyfish_lower(target->jellyfishNum);
 }
 
@@ -1143,6 +1154,7 @@ void aquarium_onFishReachedGoal(int id, int fishID)
   {
     globalStep++;
     globalStep %= 3;
+    fish_setVelocity(target->fishNum, 5000);
     switch(globalStep)
     {
       case 0:
@@ -1155,6 +1167,30 @@ void aquarium_onFishReachedGoal(int id, int fishID)
         fish_goTo(target->fishNum, 100000000, 0, 0);
         break;
     }
+  }
+  else
+  {
+    fish_stop(target->fishNum);
+  }
+}
+
+void aquarium_runFishToOpposingSide_(int id, int tappedSensor)
+{
+  Aquarium * target;
+  target = aquarium_getInstance(id);
+  
+  fish_setVelocity(0, 10000);
+  switch(tappedSensor)
+  {
+    case NORTHEAST:
+    case SOUTHEAST:
+      fish_goTo(target->fishNum, -100000000, 0, 0);
+      break;
+    
+    case SOUTHWEST:
+    case NORTHWEST:
+      fish_goTo(target->fishNum, 100000000, 0, 0);
+      break;
   }
 }
 
